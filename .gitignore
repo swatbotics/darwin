@@ -1,0 +1,8 @@
+# Global .gitconfig for Swatbotics DARwIn-OP code.
+
+*.[oa]
+*~
+*.swp
+*#
+*.#
+*.DS_Store
