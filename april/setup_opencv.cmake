@@ -79,6 +79,8 @@ else() # Mac OS X / Linux
     include_directories(/usr/local/include/opencv)
   endif()
 
+  include_directories(/usr/include/opencv-2.3.1)
+
   find_library(OPENCV_CORE_LIBRARY opencv_core)
   find_library(OPENCV_IMGPROC_LIBRARY opencv_imgproc)
   find_library(OPENCV_HIGHGUI_LIBRARY opencv_highgui)
