@@ -78,7 +78,7 @@ public:
    *  5 4 3  ==>  1 4 7 ==>  3 4 5    (rotate90 applied twice)
    *  2 1 0       0 3 6      6 7 8
    **/
-  static code_t rotate90(code_t w, int d);
+  static code_t rotate90(code_t w, uint d);
 
   /** Compute the hamming distance between two code_ts. **/
   static uint hammingDistance(code_t a, code_t b);

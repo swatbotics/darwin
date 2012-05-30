@@ -899,12 +899,41 @@ void TagDetector::process(const cv::Mat& orig,
       }
     }
 
+    if (debug) {
+      
+      GrayModel* models[2];
+      models[0] = &whiteModel;
+      models[1] = &blackModel;
+
+      const char* names[2] = { "white", "black" };
+
+      for (int m=0; m<2; ++m) {
+	GrayModel* model = models[m];
+	model->compute();
+	at::Mat Amat(4, 4, &(model->A[0][0]));
+	at::Mat bvec(4, 1, model->b);
+	at::Mat xvec(4, 1, model->X);
+	std::cout << "for quad " << i << ", model " << names[m] << ":\n";
+	std::cout << "  A =\n" << Amat << "\n";
+	std::cout << "  b = " << bvec << "\n";
+	std::cout << "  x = " << xvec << "\n";
+      }
+
+
+
+    }
+
     bool bad = false;
     TagFamily::code_t tagCode = 0;
+
+    if (debug) { std::cout << "\n"; }
 
     // Try reading off the bits.
     // XXX: todo: multiple samples within each cell and vote?
     for (uint iy = tagFamily.d-1; iy < tagFamily.d; iy--) {
+
+      if (debug) { std::cout << "  "; }
+
       for (uint ix = 0; ix < tagFamily.d; ix++) {
 
         at::real y = (tagFamily.blackBorder + iy + .5) / dd;
@@ -915,6 +944,7 @@ void TagDetector::process(const cv::Mat& orig,
         int iry = (int) (pxy.y+.5);
 
         if (irx < 0 || irx >= width || iry < 0 || iry >= height) {
+	  if (debug) { std::cout << "quad " << i << " was bad!\n"; }
           bad = true;
           continue;
         }
@@ -924,17 +954,29 @@ void TagDetector::process(const cv::Mat& orig,
 
         at::real v = fim(iry, irx);
 
-        tagCode = tagCode << 1;
+        tagCode = tagCode << TagFamily::code_t(1);
 
         if (v > threshold) {
-          tagCode |= 1;
+          tagCode |= TagFamily::code_t(1);
         }
 
+	if (debug) {
+	  std::cout << ((v > threshold) ? "##" : "  ");
+	}
+
       }
+
+      if (debug) { std::cout << "\n"; }
+
     }
 
+    if (debug) { std::cout << "\n"; }
 
     if (!bad) {
+
+      if (debug) {
+	std::cout << "for quad " << i << " got tagCode " << tagCode << "\n";
+      }
 
       TagDetection d;
       tagFamily.decode(d, tagCode);

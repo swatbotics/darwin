@@ -5,14 +5,17 @@
 
 int main(int argc, char** argv) {
 
+  const std::string dstr = "--decimate";
+
   if (argc < 3) {
-    std::cerr << "Usage: " << argv[0] << " TAGFAMILY IMAGE1 [IMAGE2 ...]\n";
+    std::cerr << "Usage: " << argv[0] << " TAGFAMILY [--decimate] IMAGE1 [IMAGE2 ...]\n";
     std::cerr << "Known tag families:";
     TagFamily::StringArray known = TagFamily::families();
     for (size_t i=0; i<known.size(); ++i) { std::cerr << " " << known[i]; }
     std::cerr << "\n";
     return 1;
   }
+    
 
   const std::string win = "Tag test";
 
@@ -22,11 +25,16 @@ int main(int argc, char** argv) {
   detector.debug = false;
   detector.debugWindowName = win;
 
-  detector.segDecimate = true;
+  int sarg = 2;
+  if (argv[sarg] == dstr) {
+    std::cout << "will decimate for segmentation!\n";
+    detector.segDecimate = true;
+    ++sarg;
+  }
 
   TagDetectionArray detections;
 
-  for (int i=2; i<argc; ++i) {
+  for (int i=sarg; i<argc; ++i) {
 
     cv::Mat src = cv::imread(argv[i]);
     if (src.empty()) { continue; }
@@ -66,6 +74,8 @@ int main(int argc, char** argv) {
     labelAndWaitForKey(win, "Detected", img, ScaleNone);
 
   }
+
+  detector.reportTimers();
 
   return 0;
 

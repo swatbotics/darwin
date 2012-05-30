@@ -49,18 +49,18 @@ void TagFamily::setErrorRecoveryFraction(at::real v) {
   errorRecoveryBits = (int) (((int) (minimumHammingDistance-1)/2)*v);
 }
 
-TagFamily::code_t TagFamily::rotate90(TagFamily::code_t w, int d) {
+TagFamily::code_t TagFamily::rotate90(TagFamily::code_t w, uint d) {
 
   code_t wr = 0;
 
-  for (int r = d-1; r >=0; r--) {
-    for (int c = 0; c < d; c++) {
-      int b = r + d*c;
+  for (uint r = d-1; r < d; r--) {
+    for (uint c = 0; c < d; c++) {
+      code_t b = r + d*c;
 
-      wr = wr << 1;
+      wr = wr << code_t(1);
 
-      if ((w & (1L << b))!=0)
-        wr |= 1;
+      if ((w & (code_t(1) << b))!=0)
+        wr |= code_t(1);
 
     }
   }
@@ -78,7 +78,7 @@ at::uint TagFamily::hammingDistance(TagFamily::code_t a, TagFamily::code_t b) {
 at::uint TagFamily::popCountReal(TagFamily::code_t w) {
   uint cnt = 0;
   while (w != 0) {
-    w &= (w-1);
+    w &= (w-code_t(1));
     cnt++;
   }
   return cnt;
@@ -91,7 +91,9 @@ const TagFamily::ByteArray& TagFamily::getPopCountTable() {
   if (tbl.empty()) {
     tbl.resize(1<<popCountTableShift);
     for (size_t i = 0; i < tbl.size(); i++) {
-      tbl[i] = (unsigned char) popCountReal(i);
+      uint pcr = popCountReal(i);
+      assert(pcr < uint(256));
+      tbl[i] = pcr;
     }
   }
 
@@ -119,8 +121,8 @@ at::uint TagFamily::popCount(TagFamily::code_t w) {
  * in. **/
 void TagFamily::decode(TagDetection& det, TagFamily::code_t rcode) const {
 
-  int  bestid = -1;
-  int  besthamming = INT_MAX;
+  size_t bestid = -1;
+  uint besthamming = uint(-1);
   int  bestrotation = 0;
   code_t bestcode = 0;
 
@@ -134,7 +136,7 @@ void TagFamily::decode(TagDetection& det, TagFamily::code_t rcode) const {
   for (size_t id = 0; id < codes.size(); id++) {
 
     for (int rot = 0; rot < 4; rot++) {
-      int thishamming = hammingDistance(rcodes[rot], codes[id]);
+      uint thishamming = hammingDistance(rcodes[rot], codes[id]);
       if (thishamming < besthamming) {
         besthamming = thishamming;
         bestrotation = rot;
@@ -163,7 +165,7 @@ at::uint TagFamily::getTagRenderDimension() const {
 void TagFamily::printHammingDistances() const {
   
   //int hammings[] = new int[d*d+1];
-  std::vector<int> hammings(d*d+1, 0);
+  std::vector<uint> hammings(d*d+1, 0);
   
   for (size_t i = 0; i < codes.size(); i++) {
     code_t r0 = codes[i];
@@ -173,11 +175,11 @@ void TagFamily::printHammingDistances() const {
     
     for (size_t j = i+1; j < codes.size(); j++) {
       
-      size_t d = std::min(std::min(hammingDistance(r0, codes[j]),
-				   hammingDistance(r1, codes[j])),
-			  std::min(hammingDistance(r2, codes[j]),
-				   hammingDistance(r3, codes[j])));
-
+      uint d = std::min(std::min(hammingDistance(r0, codes[j]),
+				 hammingDistance(r1, codes[j])),
+			std::min(hammingDistance(r2, codes[j]),
+				 hammingDistance(r3, codes[j])));
+      
       assert(d < hammings.size());
       hammings[d]++;
     }
@@ -217,12 +219,12 @@ cv::Mat_<TagFamily::byte> TagFamily::makeImage(size_t id) const {
   // Now, draw the payload.
   for (uint y = 0; y < d; y++) {
     for (uint x = 0; x < d; x++) {
-      if ((v&(1L<<(bits-1)))!=0)
+      if ((v&(code_t(1)<<code_t(bits-1)))!=0)
         rval(y+bb,x+bb) = white;
       else
         rval(y+bb,x+bb) = black;
       
-      v = v<<1;
+      v = v<<code_t(1);
     }
   }
   
@@ -241,11 +243,11 @@ void TagFamily::writeAllImages(const std::string& dirpath) const {
   for (size_t i = 0; i < codes.size(); i++) {
     cv::Mat im = makeImage(i);
     char buf[1024];
-    snprintf(buf, 1024, "%stag%02d_%02d_%05lu.png",
+    snprintf(buf, 1024, "%stag%02d_%02d_%05u.png",
              ddir.c_str(),
              bits,
              minimumHammingDistance,
-             i);
+             uint(i));
     cv::imwrite( buf, im );
   }
 }
@@ -259,11 +261,11 @@ void TagFamily::writeAllImagesSVG(const std::string& dirpath) const {
 
   for (size_t i = 0; i < codes.size(); i++) {
     char buf[1024];
-    snprintf(buf, 1024, "%stag%02d_%02d_%05lu.svg",
+    snprintf(buf, 1024, "%stag%02d_%02d_%05u.svg",
              ddir.c_str(),
              bits,
              minimumHammingDistance,
-             i);
+             uint(i));
     writeImageSVG(buf, i);
   }
 }
@@ -297,11 +299,11 @@ void TagFamily::writeImageSVG(const std::string& filename, size_t id) const {
   
   for (uint y=0; y<d; ++y) {
     for (uint x=0; x<d; ++x) {
-      if ((v&(1L<<(bits-1)))!=0) {
+      if ((v&(code_t(1)<<code_t(bits-1)))!=0) {
         ostr << "<rect x=\""<<(x0+scl*x)<<"\" y=\""<<(y0+scl*y)<<"\" fill=\"#ffffff\" stroke=\"#ffffff\" stroke-width=\""<<sw<<"\" width=\""<<scl<<"\" height=\""<<scl<<"\"/>\n";
         
       }
-      v = v<<1;
+      v = v<<code_t(1);
     }
   }
 
@@ -355,10 +357,10 @@ void TagFamily::writeAllImagesPostScript(const std::string& filepath) const {
     code_t v = codes[i];
     for (uint y=0; y<d; ++y) {
       for (uint x=0; x<d; ++x) {
-        if ((v&(1L<<(bits-1)))!=0) {
+        if ((v&(code_t(1)<<code_t(bits-1)))!=0) {
           ostr << (x + m) << " " << (y + m) << " b ";
         }
-        v = v<<1;
+        v = v<<code_t(1);
       }
     }
     ostr << "(Tag family " << bits << "h" << minimumHammingDistance << ", tag #" << i << ") em\n";
