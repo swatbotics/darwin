@@ -43,6 +43,8 @@ add_executable(maketags maketags.cpp)
 target_link_libraries(maketags apriltagcpp ${CAIRO_LIBRARY})
 add_opencv_libs(maketags)
 
+if (GLUT_LIBRARY)
 add_executable(gltest gltest.cpp)
 target_link_libraries(gltest apriltagcpp ${GLUT_LIBRARY} ${OPENGL_LIBRARIES})
 add_opencv_libs(gltest)
+endif (GLUT_LIBRARY)
