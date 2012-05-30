@@ -17,7 +17,7 @@ find_library(GLUT_LIBRARY glut)
 set(OPENGL_LIBRARIES ${OPENGL_LIBRARY} ${GLU_LIBRARY})
 endif (apple)
 
-set(CMAKE_C_FLAGS "-Wall -O3 -msse2")
+set(CMAKE_C_FLAGS "-Wall -O -g")
 set(CMAKE_CXX_FLAGS ${CMAKE_C_FLAGS})
 
 add_library(apriltagcpp 

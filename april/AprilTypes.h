@@ -2,10 +2,12 @@
 #define _APRILTYPES_H_
 
 #include <opencv2/core/core.hpp>
+#include <stdint.h>
 
 namespace at {
 
-  typedef unsigned long code_t;
+  typedef uint64_t code_t;
+  typedef unsigned int uint;
 
 #if 1
 

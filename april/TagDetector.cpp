@@ -15,8 +15,8 @@
 #define _USE_FAST_MATH_
 
 typedef std::vector<at::real> RealArray;
-typedef std::vector<int>    IntArray;
-typedef std::vector<long>   LongArray;
+typedef std::vector<size_t> SizeArray;
+typedef std::vector<uint64_t> Uint64Array;
 
 enum TimerIndex {
   total_time = 0,
@@ -56,7 +56,7 @@ void TagDetector::initTimers() {
   num_iterations = 0;
   num_detections = 0;
   memset(run_times, 0, sizeof(run_times));
-  memset(descriptions, 0, sizeof(run_times));
+  memset(descriptions, 0, sizeof(descriptions));
 }
 
 void TagDetector::reportTimers() {
@@ -116,10 +116,12 @@ static const ScalarVec& getCColors() {
 
 //////////////////////////////////////////////////////////////////////
 
-static void countingSortLongArray(LongArray& v, int vlength, int maxv, long mask) {
+static void countingSortLongArray(Uint64Array& v,
+				  size_t vlength, 
+				  int maxv, uint64_t mask) {
 
   if (maxv < 0) {
-    for (int i = 0; i < vlength; i++)
+    for (size_t i = 0; i < vlength; i++)
       maxv = std::max(maxv, (int) (v[i]&mask));
   }
 
@@ -130,22 +132,22 @@ static void countingSortLongArray(LongArray& v, int vlength, int maxv, long mask
   // the number of weights less than w, hence the +1 in
   // counts[w+1].
   //  int counts[] = new int[maxv+2];
-  IntArray counts(maxv+2, 0);
+  SizeArray counts(maxv+2, 0);
   
-  for (int i = 0; i < vlength; i++) {
+  for (size_t i = 0; i < vlength; i++) {
     int w = (int) (v[i]&mask);
     counts[w+1]++;
   }
   
   // accumulate.
-  for (int i = 1; i < counts.size(); i++) {
+  for (size_t i = 1; i < counts.size(); i++) {
     counts[i] += counts[i-1];
   }
   
   //long newv[] = new long[vlength];
-  LongArray newv(vlength);
+  Uint64Array newv(vlength);
 
-  for (int i = 0; i < vlength; i++) {
+  for (size_t i = 0; i < vlength; i++) {
     int w = (int) (v[i]&mask);
     newv[counts[w]] = v[i];
     counts[w]++;
@@ -240,7 +242,7 @@ at::real TagDetector::arctan2(at::real y, at::real x) {
 }
 
 int TagDetector::edgeCost(at::real theta0, at::real mag0, 
-                          at::real theta1, at::real mag1) const {
+			  at::real theta1, at::real mag1) const {
 
   if (mag0 < minMag || mag1 < minMag) {
     return -1;
@@ -252,6 +254,8 @@ int TagDetector::edgeCost(at::real theta0, at::real mag0,
   }
 
   at::real normErr = thetaErr / maxEdgeCost;
+
+  assert( int(normErr*WEIGHT_SCALE) >= 0 );
     
   return (int) (normErr * WEIGHT_SCALE);
 
@@ -381,8 +385,8 @@ void TagDetector::process(const cv::Mat& orig,
   at::Mat fimTheta( fimseg.size() );
   at::Mat fimMag( fimseg.size() );
 
-  for (size_t y=1; y+1<fimseg.rows; ++y) {
-    for (size_t x=1; x+1<fimseg.cols; ++x) {
+  for (int y=1; y+1<fimseg.rows; ++y) {
+    for (int x=1; x+1<fimseg.cols; ++x) {
 
       at::real Ix = fimseg(y, x+1) - fimseg(y, x-1);
       at::real Iy = fimseg(y+1, x) - fimseg(y-1, x);
@@ -408,8 +412,8 @@ void TagDetector::process(const cv::Mat& orig,
 
     at::real mmin =  AT_REAL_MAX;
     at::real mmax = -AT_REAL_MAX;
-    for (size_t y=1; y+1<fimseg.rows; ++y) {
-      for (size_t x=1; x+1<fimseg.cols; ++x) {
+    for (int y=1; y+1<fimseg.rows; ++y) {
+      for (int x=1; x+1<fimseg.cols; ++x) {
         at::real m = fimMag(y,x);
         mmin = std::min(mmin, m);
         mmax = std::max(mmax, m);
@@ -418,8 +422,8 @@ void TagDetector::process(const cv::Mat& orig,
 
     size_t nbins = 10;
     std::vector<int> hist(nbins, 0);
-    for (size_t y=1; y+1<fimseg.rows; ++y) {
-      for (size_t x=1; x+1<fimseg.cols; ++x) {
+    for (int y=1; y+1<fimseg.rows; ++y) {
+      for (int x=1; x+1<fimseg.cols; ++x) {
         at::real m = fimMag(y,x);
         at::real f = (m-mmin)/(mmax-mmin);
         int bin = int(f*(nbins-1) + 0.5);
@@ -462,14 +466,14 @@ void TagDetector::process(const cv::Mat& orig,
     int width = fimseg.cols;
     int height = fimseg.rows;
     
-    LongArray edges(width*height*4);
+    Uint64Array edges(width*height*4);
 
     int nedges = 0;
 
     // for efficiency, each edge is encoded as a single
     // long. The constants below are used to pack/unpack the
     // long.
-    const long IDA_SHIFT = 40, IDB_SHIFT = 16, 
+    const uint64_t IDA_SHIFT = 40, IDB_SHIFT = 16, 
       INDEX_MASK = (1<<24) - 1, WEIGHT_MASK=(1<<16)-1;
     
     // bounds on the thetas assigned to this group. Note that
@@ -505,8 +509,8 @@ void TagDetector::process(const cv::Mat& orig,
 
         if (edgeCost >= 0) {
           edges[nedges++] = 
-            (((long) y*width+x)<<IDA_SHIFT) + 
-            (((long) y*width+x+1)<<IDB_SHIFT) + edgeCost;
+            (uint64_t(y*width+x)<<IDA_SHIFT) + 
+	    (uint64_t(y*width+x+1)<<IDB_SHIFT) + edgeCost;
         }
 
         // DOWN
@@ -516,8 +520,8 @@ void TagDetector::process(const cv::Mat& orig,
 
         if (edgeCost >= 0) {
           edges[nedges++] = 
-            ((long) (y*width+x)<<IDA_SHIFT) + 
-            (((long) (y+1)*width+x)<<IDB_SHIFT) + edgeCost;
+            (uint64_t(y*width+x)<<IDA_SHIFT) + 
+            (uint64_t((y+1)*width+x)<<IDB_SHIFT) + edgeCost;
         }
 
         // DOWN & RIGHT
@@ -527,8 +531,8 @@ void TagDetector::process(const cv::Mat& orig,
 
         if (edgeCost >= 0) {
           edges[nedges++] = 
-            (((long) y*width+x)<<IDA_SHIFT) + 
-            (((long) (y+1)*width+x+1)<<IDB_SHIFT) + edgeCost;
+            (uint64_t(y*width+x)<<IDA_SHIFT) + 
+            (uint64_t((y+1)*width+x+1)<<IDB_SHIFT) + edgeCost;
         }
 
 
@@ -540,8 +544,8 @@ void TagDetector::process(const cv::Mat& orig,
 
         if (edgeCost >= 0) {
           edges[nedges++] = 
-            (((long) y*width+x)<<IDA_SHIFT) + 
-            (((long) (y+1)*width+x-1)<<IDB_SHIFT) + edgeCost;
+            (uint64_t(y*width+x)<<IDA_SHIFT) + 
+            (uint64_t((y+1)*width+x-1)<<IDB_SHIFT) + edgeCost;
         }
 
         // XXX Would 8 connectivity help for rotated tags?
@@ -900,8 +904,8 @@ void TagDetector::process(const cv::Mat& orig,
 
     // Try reading off the bits.
     // XXX: todo: multiple samples within each cell and vote?
-    for (int iy = tagFamily.d-1; iy >= 0; iy--) {
-      for (int ix = 0; ix < tagFamily.d; ix++) {
+    for (uint iy = tagFamily.d-1; iy < tagFamily.d; iy--) {
+      for (uint ix = 0; ix < tagFamily.d; ix++) {
 
         at::real y = (tagFamily.blackBorder + iy + .5) / dd;
         at::real x = (tagFamily.blackBorder + ix + .5) / dd;

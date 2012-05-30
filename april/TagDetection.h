@@ -18,10 +18,10 @@ public:
   at::code_t code;
 
   /** What was the ID of the detected tag? **/
-  int id;
+  size_t id;
 
   /** The hamming distance between the detected code and the true code. **/
-  int hammingDistance;
+  at::uint hammingDistance;
 
   /** How many 90 degree rotations were required to align the code. **/
   int rotation;

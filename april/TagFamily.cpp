@@ -36,7 +36,7 @@ void TagFamily::init(int b,
   assert(d*d == bits);
 
   minimumHammingDistance = std::max(mhd, 1);
-  errorRecoveryBits = std::min(minimumHammingDistance-1, 1);
+  errorRecoveryBits = std::min(minimumHammingDistance-1, uint(1));
   codes.assign(data, data+count);
   
 }
@@ -70,13 +70,13 @@ TagFamily::code_t TagFamily::rotate90(TagFamily::code_t w, int d) {
 }
 
 /** Compute the hamming distance between two code_ts. **/
-int TagFamily::hammingDistance(TagFamily::code_t a, TagFamily::code_t b) {
+uint TagFamily::hammingDistance(TagFamily::code_t a, TagFamily::code_t b) {
   return popCount(a^b);
 }
 
 /** How many bits are set in the code_t? **/
-int TagFamily::popCountReal(TagFamily::code_t w) {
-  int cnt = 0;
+uint TagFamily::popCountReal(TagFamily::code_t w) {
+  uint cnt = 0;
   while (w != 0) {
     w &= (w-1);
     cnt++;
@@ -90,7 +90,7 @@ const TagFamily::ByteArray& TagFamily::getPopCountTable() {
 
   if (tbl.empty()) {
     tbl.resize(1<<popCountTableShift);
-    for (int i = 0; i < tbl.size(); i++) {
+    for (size_t i = 0; i < tbl.size(); i++) {
       tbl[i] = (unsigned char) popCountReal(i);
     }
   }
@@ -99,9 +99,9 @@ const TagFamily::ByteArray& TagFamily::getPopCountTable() {
 
 }
 
-int TagFamily::popCount(TagFamily::code_t w) {
+uint TagFamily::popCount(TagFamily::code_t w) {
 
-  int count = 0;
+  uint count = 0;
   
   const ByteArray& tbl = getPopCountTable();
   
@@ -131,7 +131,7 @@ void TagFamily::decode(TagDetection& det, TagFamily::code_t rcode) const {
   rcodes[2] = rotate90(rcodes[1], d);
   rcodes[3] = rotate90(rcodes[2], d);
 
-  for (int id = 0; id < codes.size(); id++) {
+  for (size_t id = 0; id < codes.size(); id++) {
 
     for (int rot = 0; rot < 4; rot++) {
       int thishamming = hammingDistance(rcodes[rot], codes[id]);
@@ -155,7 +155,7 @@ void TagFamily::decode(TagDetection& det, TagFamily::code_t rcode) const {
 
 
 /** Return the dimension of the tag including borders when we render it.**/
-int TagFamily::getTagRenderDimension() const {
+uint TagFamily::getTagRenderDimension() const {
   return whiteBorder*2 + blackBorder*2 + d;
 }
 
@@ -165,36 +165,36 @@ void TagFamily::printHammingDistances() const {
   //int hammings[] = new int[d*d+1];
   std::vector<int> hammings(d*d+1, 0);
   
-  for (int i = 0; i < codes.size(); i++) {
+  for (size_t i = 0; i < codes.size(); i++) {
     code_t r0 = codes[i];
     code_t r1 = rotate90(r0, d);
     code_t r2 = rotate90(r1, d);
     code_t r3 = rotate90(r2, d);
     
-    for (int j = i+1; j < codes.size(); j++) {
+    for (size_t j = i+1; j < codes.size(); j++) {
       
-      int d = std::min(std::min(hammingDistance(r0, codes[j]),
-                                hammingDistance(r1, codes[j])),
-                       std::min(hammingDistance(r2, codes[j]),
-                                hammingDistance(r3, codes[j])));
+      size_t d = std::min(std::min(hammingDistance(r0, codes[j]),
+				   hammingDistance(r1, codes[j])),
+			  std::min(hammingDistance(r2, codes[j]),
+				   hammingDistance(r3, codes[j])));
 
       assert(d < hammings.size());
       hammings[d]++;
     }
   }
   
-  for (int i = 0; i < hammings.size(); i++) {
+  for (size_t i = 0; i < hammings.size(); i++) {
     std::cout << i << "    " << hammings[i] << "\n";
   }
   
 }
 
-cv::Mat_<TagFamily::byte> TagFamily::makeImage(int id) const {
+cv::Mat_<TagFamily::byte> TagFamily::makeImage(size_t id) const {
 
   code_t v = codes[id];
   
-  int width = getTagRenderDimension();
-  int height = getTagRenderDimension();
+  uint width = getTagRenderDimension();
+  uint height = getTagRenderDimension();
   
   cv::Mat_<byte> rval(height, width);
   const byte white = 255;
@@ -202,8 +202,8 @@ cv::Mat_<TagFamily::byte> TagFamily::makeImage(int id) const {
   
   // Draw the borders.  It's easier to do this by iterating over
   // the whole tag than just drawing the borders.
-  for (int y = 0; y < width; y++) {
-    for (int x = 0; x < height; x++) {
+  for (uint y = 0; y < width; y++) {
+    for (uint x = 0; x < height; x++) {
       if (y < whiteBorder || y+whiteBorder >= height ||
           x < whiteBorder || x+whiteBorder >= width)
         rval(y,x) = white;
@@ -215,8 +215,8 @@ cv::Mat_<TagFamily::byte> TagFamily::makeImage(int id) const {
   int bb = whiteBorder + blackBorder;
   
   // Now, draw the payload.
-  for (int y = 0; y < d; y++) {
-    for (int x = 0; x < d; x++) {
+  for (uint y = 0; y < d; y++) {
+    for (uint x = 0; x < d; x++) {
       if ((v&(1L<<(bits-1)))!=0)
         rval(y+bb,x+bb) = white;
       else
@@ -238,7 +238,7 @@ void TagFamily::writeAllImages(const std::string& dirpath) const {
     ddir += "/";
   }
 
-  for (int i = 0; i < codes.size(); i++) {
+  for (size_t i = 0; i < codes.size(); i++) {
     cv::Mat im = makeImage(i);
     char buf[1024];
     snprintf(buf, 1024, "%stag%02d_%02d_%05d.png",
@@ -257,7 +257,7 @@ void TagFamily::writeAllImagesSVG(const std::string& dirpath) const {
     ddir += "/";
   }
 
-  for (int i = 0; i < codes.size(); i++) {
+  for (size_t i = 0; i < codes.size(); i++) {
     char buf[1024];
     snprintf(buf, 1024, "%stag%02d_%02d_%05d.svg",
              ddir.c_str(),
@@ -268,7 +268,7 @@ void TagFamily::writeAllImagesSVG(const std::string& dirpath) const {
   }
 }
 
-void TagFamily::writeImageSVG(const std::string& filename, int id) const {
+void TagFamily::writeImageSVG(const std::string& filename, size_t id) const {
   
   std::ofstream ostr(filename.c_str());
   if (!ostr.is_open()) { return; }
@@ -295,8 +295,8 @@ void TagFamily::writeImageSVG(const std::string& filename, int id) const {
 
   code_t v = codes[id];
   
-  for (int y=0; y<d; ++y) {
-    for (int x=0; x<d; ++x) {
+  for (uint y=0; y<d; ++y) {
+    for (uint x=0; x<d; ++x) {
       if ((v&(1L<<(bits-1)))!=0) {
         ostr << "<rect x=\""<<(x0+scl*x)<<"\" y=\""<<(y0+scl*y)<<"\" fill=\"#ffffff\" stroke=\"#ffffff\" stroke-width=\""<<sw<<"\" width=\""<<scl<<"\" height=\""<<scl<<"\"/>\n";
         
@@ -353,8 +353,8 @@ void TagFamily::writeAllImagesPostScript(const std::string& filepath) const {
   for (size_t i=0; i<codes.size(); ++i) {
     ostr << "sm ";
     code_t v = codes[i];
-    for (int y=0; y<d; ++y) {
-      for (int x=0; x<d; ++x) {
+    for (uint y=0; y<d; ++y) {
+      for (uint x=0; x<d; ++x) {
         if ((v&(1L<<(bits-1)))!=0) {
           ostr << (x + m) << " " << (y + m) << " b ";
         }

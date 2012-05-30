@@ -7,6 +7,8 @@
 class TagDetector {
 public:
 
+  typedef at::uint uint;
+
   const TagFamily& tagFamily;
 
   at::real sigma;
@@ -31,7 +33,7 @@ public:
   static at::real arctan2(at::real y, at::real x);
 
   int edgeCost(at::real theta0, at::real mag0, 
-               at::real theta1, at::real mag1) const;
+	       at::real theta1, at::real mag1) const;
 
   void process(const cv::Mat& image,
                const at::Point& opticalCenter,

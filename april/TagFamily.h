@@ -10,6 +10,7 @@ public:
 
   typedef unsigned char byte;
   typedef at::code_t code_t;
+  typedef at::uint uint;
 
   typedef std::vector<code_t> CodeArray;
   typedef std::vector<byte> ByteArray;
@@ -18,22 +19,22 @@ public:
   /** How many pixels wide is the outer-most white border? This is
    * only used when rendering a tag, not for decoding a tag (since
    * we look for the white/black edge). **/
-  int whiteBorder;
+  uint whiteBorder;
 
   /** How many pixels wide is the inner black border? **/
-  int blackBorder;
+  uint blackBorder;
   
   /** number of bits in the tag. Must be a square (n^2). **/
-  int bits;
+  uint bits;
 
   /** dimension of tag. e.g. for 16 bits, d=4. Must be sqrt(bits). **/
-  int d;
+  uint d;
 
   /** What is the minimum hamming distance between any two codes
    * (accounting for rotational ambiguity? The code can recover
    * (minHammingDistance-1)/2 bit errors.
    **/
-  int minimumHammingDistance;
+  uint minimumHammingDistance;
 
   /** The error recovery value determines our position on the ROC
    * curve. We will report codes that are within errorRecoveryBits
@@ -42,7 +43,7 @@ public:
    * reporting of bad tags (but with a corresponding increase in
    * false positives).
    **/
-  int errorRecoveryBits;
+  uint errorRecoveryBits;
 
   /** The array of the codes. The id for a code is its index. **/
   CodeArray codes;
@@ -80,29 +81,29 @@ public:
   static code_t rotate90(code_t w, int d);
 
   /** Compute the hamming distance between two code_ts. **/
-  static int hammingDistance(code_t a, code_t b);
+  static uint hammingDistance(code_t a, code_t b);
 
   /** How many bits are set in the code_t? **/
-  static int popCountReal(code_t w);
+  static uint popCountReal(code_t w);
 
   enum { popCountTableShift = 12 };
 
   static const ByteArray& getPopCountTable();
 
-  static int popCount(code_t w);
+  static uint popCount(code_t w);
 
   void decode(TagDetection& det, code_t rcode) const;
 
 
-  int getTagRenderDimension() const;
+  uint getTagRenderDimension() const;
 
   void printHammingDistances() const;
 
-  cv::Mat_<byte> makeImage(int id) const;
+  cv::Mat_<byte> makeImage(size_t id) const;
   void writeAllImages(const std::string& dirpath) const;
   void writeAllImagesSVG(const std::string& dirpath) const;
   void writeAllImagesPostScript(const std::string& filepath) const;
-  void writeImageSVG(const std::string& filename, int id) const;
+  void writeImageSVG(const std::string& filename, size_t id) const;
 
   cv::Mat getWarp(const TagDetection& det) const;
 
@@ -110,7 +111,7 @@ public:
                                const TagDetection& det) const;
 
   cv::Mat detectionImage(const TagDetection& det,
-                         const cv::Size& size, int type) const;
+                         const cv::Size& size, int cvtype) const;
   
   cv::Mat superimposeDetections(const cv::Mat& image,
                                 const TagDetectionArray& detections) const;
