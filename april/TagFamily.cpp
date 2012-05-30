@@ -70,12 +70,12 @@ TagFamily::code_t TagFamily::rotate90(TagFamily::code_t w, int d) {
 }
 
 /** Compute the hamming distance between two code_ts. **/
-uint TagFamily::hammingDistance(TagFamily::code_t a, TagFamily::code_t b) {
+at::uint TagFamily::hammingDistance(TagFamily::code_t a, TagFamily::code_t b) {
   return popCount(a^b);
 }
 
 /** How many bits are set in the code_t? **/
-uint TagFamily::popCountReal(TagFamily::code_t w) {
+at::uint TagFamily::popCountReal(TagFamily::code_t w) {
   uint cnt = 0;
   while (w != 0) {
     w &= (w-1);
@@ -99,7 +99,7 @@ const TagFamily::ByteArray& TagFamily::getPopCountTable() {
 
 }
 
-uint TagFamily::popCount(TagFamily::code_t w) {
+at::uint TagFamily::popCount(TagFamily::code_t w) {
 
   uint count = 0;
   
@@ -155,7 +155,7 @@ void TagFamily::decode(TagDetection& det, TagFamily::code_t rcode) const {
 
 
 /** Return the dimension of the tag including borders when we render it.**/
-uint TagFamily::getTagRenderDimension() const {
+at::uint TagFamily::getTagRenderDimension() const {
   return whiteBorder*2 + blackBorder*2 + d;
 }
 
@@ -241,7 +241,7 @@ void TagFamily::writeAllImages(const std::string& dirpath) const {
   for (size_t i = 0; i < codes.size(); i++) {
     cv::Mat im = makeImage(i);
     char buf[1024];
-    snprintf(buf, 1024, "%stag%02d_%02d_%05d.png",
+    snprintf(buf, 1024, "%stag%02d_%02d_%05lu.png",
              ddir.c_str(),
              bits,
              minimumHammingDistance,
@@ -259,7 +259,7 @@ void TagFamily::writeAllImagesSVG(const std::string& dirpath) const {
 
   for (size_t i = 0; i < codes.size(); i++) {
     char buf[1024];
-    snprintf(buf, 1024, "%stag%02d_%02d_%05d.svg",
+    snprintf(buf, 1024, "%stag%02d_%02d_%05lu.svg",
              ddir.c_str(),
              bits,
              minimumHammingDistance,
