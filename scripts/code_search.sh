@@ -3,13 +3,14 @@
 
 # Get the directory that the script is in.
 SCRIPT_DIR="$(dirname $0)"
+DARWIN_DIR="$SCRIPT_DIR/../darwin"
 
-# Locations of source files to search, relative to SCRIPT_DIR.
-FRAMEWORK_INCS="$SCRIPT_DIR"/Framework/include
-FRAMEWORK_SRCS="$SCRIPT_DIR"/Framework/src
-LINUX_INCS="$SCRIPT_DIR"/Linux/include
-LINUX_SRCS="$SCRIPT_DIR"/Linux/build
-TUTORIALS="$SCRIPT_DIR"/Linux/project/tutorial
+# Locations of source files to search, relative to DARWIN_DIR.
+FRAMEWORK_INCS="$DARWIN_DIR"/Framework/include
+FRAMEWORK_SRCS="$DARWIN_DIR"/Framework/src
+LINUX_INCS="$DARWIN_DIR"/Linux/include
+LINUX_SRCS="$DARWIN_DIR"/Linux/build
+TUTORIALS="$DARWIN_DIR"/Linux/project/tutorial
 
 # Require an argument (otherwise grep misbehaves).
 if (($# < 1)); then
