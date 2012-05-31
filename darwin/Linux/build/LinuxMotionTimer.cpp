@@ -62,8 +62,17 @@ void LinuxMotionTimer::Start(void)
         printf("error = %d\n",error);
 
     // create and start the thread
-    if((error = pthread_create(&this->m_Thread, &attr, this->TimerProc, this))!= 0)
-        exit(-1);
+    if((error = pthread_create(&this->m_Thread, &attr, this->TimerProc, this)) == 0) {
+      this->m_TimerRunning = true;
+      return;
+    }
+
+    fprintf(stderr, "couldn't create thread with realtime scheduling priority... rerun as root for realtime\n");
+
+    if((error = pthread_create(&this->m_Thread, NULL, this->TimerProc, this))!= 0) {
+      fprintf(stderr, "couldn't create timer thread!\n");
+      exit(1);
+    }
 
     this->m_TimerRunning=true;
 
