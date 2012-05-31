@@ -9,6 +9,7 @@ RC_LOCAL_LINE="/etc/init.d/darwin-startup.sh"
 if ! which play >/dev/null; then
   echo "The 'play' command must be installed; try running"
   echo "  sudo apt-get install sox libsox-fmt-all"
+  exit 1
 fi
 
 echo "Adding boot scripts in /etc/init.d."
