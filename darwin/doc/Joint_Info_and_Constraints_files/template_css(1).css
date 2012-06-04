@@ -1,0 +1,19 @@
+/*
+ * Robosavvy template
+ * templatee_css.css - Joomla template file 
+ * 2006
+ */
+
+@import url("basis.css");
+@import url("structure.css");
+@import url("menu.css");
+@import url("content.css");
+@import url("forms.css");
+@import url("top.css");
+@import url("comments.css");
+@import url("pmwiki.css");
+
+@import url("articles.css");
+
+/* End of template_css.css */
+
