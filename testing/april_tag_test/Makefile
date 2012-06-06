@@ -6,7 +6,7 @@ INCLUDE_DIRS += -I../..
 #INCLUDE_DIRS += -I/usr/include/opencv2
 
 CXX = g++
-CXXFLAGS += -O2 -DLINUX -Wall $(INCLUDE_DIRS)
+CXXFLAGS += -O -g -DLINUX -Wall $(INCLUDE_DIRS)
 #CXXFLAGS += -O2 -DDEBUG -DLINUX -Wall $(INCLUDE_DIRS)
 LFLAGS += -lpthread -ljpeg -lrt
 LFLAGS += -L../../april/build -lapriltagcpp
