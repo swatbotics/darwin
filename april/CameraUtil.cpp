@@ -198,9 +198,21 @@ void homographyToPoseCV(at::real fx, at::real fy,
   cv::Mat_<at::Point> imat(4, 1, ipoints);
 
   cv::Mat r, t;
+
   cv::solvePnP(omat, imat, Kmat, dcoeffs, r, t);
-  r.convertTo(rvec, rvec.type());
-  t.convertTo(tvec, tvec.type());
+
+  if (rvec.type() == CV_32F) {
+    r.convertTo(rvec, rvec.type());
+  } else {
+    rvec = r;
+  }
+
+  if (tvec.type() == CV_32F) {
+    t.convertTo(tvec, tvec.type());
+  } else {
+    tvec = t;
+  }
+
 }
 
 
