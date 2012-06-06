@@ -33,6 +33,14 @@
 // From Nick Rhinehart's code, TagPositionWriter.java
 #define DARWIN_FOCAL_LENGTH 265.45
 
+// Paths to MP3 files to play amusing noises when discovering tags.
+#define TAG_FOUND_MP3_FILE "../../darwin/Data/mp3/Wow.mp3"
+#define TAG_LOST_MP3_FILE "../../darwin/Data/mp3/Oops.mp3"
+
+// In pixels.
+#define TAG_RING_INNER_RADIUS 20
+#define TAG_RING_OUTER_RADIUS 23
+
 void change_current_dir() {
   char exepath[1024] = {0};
   if (readlink("/proc/self/exe", exepath, sizeof(exepath)) != -1) {
@@ -97,32 +105,27 @@ int main(void) {
   
   LinuxCamera* camera = LinuxCamera::GetInstance();
   while (true) {
-    Point2D pos;
     camera->CaptureFrame();
-    Image* hsv_image = camera->fbuffer->m_HSVFrame;
-    tracker.Process(ball_finder->GetPosition(hsv_image));
-
-    Image* rgb_ball = LinuxCamera::GetInstance()->fbuffer->m_RGBFrame;
-    for (int i = 0; i < rgb_ball->m_NumberOfPixels; i++) {
-      if (ball_finder->m_result->m_ImageData[i] == 1) {
-	rgb_ball->m_ImageData[i*rgb_ball->m_PixelSize + 0] = 255;
-	rgb_ball->m_ImageData[i*rgb_ball->m_PixelSize + 1] = 0;
-	rgb_ball->m_ImageData[i*rgb_ball->m_PixelSize + 2] = 0;
-      }
-    }
-    streamer->send_image(rgb_ball);
-
-    unsigned char* raw_frame = camera->fbuffer->m_RGBFrame->m_ImageData;
+    Image* rgb_image = LinuxCamera::GetInstance()->fbuffer->m_RGBFrame;
+    unsigned char* raw_frame = rgb_image->m_ImageData;
     cv::Mat frame(Camera::HEIGHT, Camera::WIDTH, CV_8UC3, raw_frame);
     detector.process(frame, opticalCenter, detections);
     //    TagDetector::reportTimers();
-    for (TagDetectionArray::iterator it = detections.begin();
-	 it != detections.end(); ++it) {
-      printf("Found tag id: %zd\n", it->id);
+
+    static bool found_tag = false;
+    if (detections.size() >= 1) {
+      if (!found_tag) {
+	found_tag = true;
+	LinuxActionScript::PlayMP3(TAG_FOUND_MP3_FILE);
+      }
+      TagDetection& d = detections[0];
+      printf("Found tag id: %zd\n", d.id);
+      Point2D tag_center(d.cxy.x, d.cxy.y);
+      tracker.Process(tag_center);
       static const double f = DARWIN_FOCAL_LENGTH;
       at::Mat r, t;
       CameraUtil::homographyToPoseCV(f, f, DEFAULT_TAG_SIZE,
-				     it->homography,
+				     d.homography,
 				     r, t);
       std::cout << "r = " << r << std::endl;
       std::cout << "t = " << t << std::endl;
@@ -132,7 +135,27 @@ int main(void) {
       print_double_visually(-0.5, 0.5, t[1][0]);
       std::cout << "t(2): ";
       print_double_visually(0.0, 2.0, t[2][0]);
+
+      for (int i = 0; i < rgb_image->m_NumberOfPixels; i++) {
+        int x = i % Camera::WIDTH;
+        int y = i / Camera::WIDTH;
+        int dist = sqrt(pow(x-d.cxy.x, 2) + pow(y-d.cxy.y, 2));
+        if (dist >= TAG_RING_INNER_RADIUS &&
+	    dist <= TAG_RING_OUTER_RADIUS) {
+	  raw_frame[i*rgb_image->m_PixelSize + 0] = 0;
+	  raw_frame[i*rgb_image->m_PixelSize + 1] = 255;
+	  raw_frame[i*rgb_image->m_PixelSize + 2] = 0;
+        }
+      }
+
+    } else {
+      if (found_tag) {
+	found_tag = false;
+	LinuxActionScript::PlayMP3(TAG_LOST_MP3_FILE);
+      }
     }
+
+    streamer->send_image(rgb_image);
   }
   return 0;
 }
