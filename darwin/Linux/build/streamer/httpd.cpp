@@ -37,6 +37,11 @@
 #include "Walking.h"
 #include "httpd.h"
 
+#define ABS(a) (((a) < 0) ? -(a) : (a))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define LENGTH_OF(x) (sizeof(x)/sizeof(x[0]))
+
 context* httpd::server;
 globals* httpd::pglobal;
 
