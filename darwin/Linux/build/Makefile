@@ -11,13 +11,19 @@ CC = g++
 AR = ar
 ARFLAGS = cr
 
-TARGET = darwin.a
+TARGET = ../lib/darwin.a
 
-INCLUDE_DIRS = -I../include -I../../Framework/include
+LINUX_INCLUDE_DIR = ../include
+FRAMEWORK_INCLUDE_DIR = ../../Framework/include
+INCLUDE_DIRS = -I$(LINUX_INCLUDE_DIR) -I$(FRAMEWORK_INCLUDE_DIR)
 
 CXXFLAGS += -O2 -DLINUX -Wall -shared $(INCLUDE_DIRS)
 #CXXFLAGS += -O2 -DDEBUG -DLINUX -Wall -shared $(INCLUDE_DIRS)
 LFLAGS += -lpthread -ldl
+
+#TODO: figure out how to make the object files recompile when headers change
+INCLUDES = $(shell find $(LINUX_INCLUDE_DIR) -name '*.h')
+INCLUDES += $(shell find $(FRAMEWORK_INCLUDE_DIR) -name '*.h')
 
 OBJS =  ../../Framework/src/CM730.o     	\
         ../../Framework/src/math/Matrix.o   \
@@ -46,11 +52,13 @@ OBJS =  ../../Framework/src/CM730.o     	\
         LinuxMotionTimer.o    \
         LinuxNetwork.o
 
-$(TARGET): $(OBJS)
-	$(AR) $(ARFLAGS) ../lib/$(TARGET) $(OBJS)
-#	$(CC) -o $(TARGET) $(OBJS) $(LFLAGS)
+
+.PHONY: clean
 
 all: $(TARGET)
 
+$(TARGET): $(OBJS)
+	$(AR) $(ARFLAGS) $(TARGET) $(OBJS)
+
 clean:
-	rm -f $(OBJS) ../lib/$(TARGET)
+	rm -f $(OBJS) $(TARGET)
