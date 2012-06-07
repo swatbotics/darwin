@@ -37,12 +37,6 @@
 #define MAX_FRAME_SIZE (256*1024)
 #define TEN_K (10*1024)
 
-
-#define ABS(a) (((a) < 0) ? -(a) : (a))
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#define LENGTH_OF(x) (sizeof(x)/sizeof(x[0]))
-
 #ifdef DEBUG
 #define DBG(...) fprintf(stderr, " DBG(%s, %s(), %d): ", __FILE__, __FUNCTION__, __LINE__); fprintf(stderr, __VA_ARGS__)
 #else
