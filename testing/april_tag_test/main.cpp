@@ -1,14 +1,8 @@
-/*
- * main.cpp
- *
- *  Created on: 2011. 1. 4.
- *      Author: robotis
- */
-
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 #include <libgen.h>
+#include <sys/time.h>
 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -104,6 +98,11 @@ int main(void) {
   TagDetectionArray detections;
   
   LinuxCamera* camera = LinuxCamera::GetInstance();
+
+  struct timeval tval;
+  gettimeofday(&tval, NULL);
+  double prevtime = tval.tv_sec + tval.tv_usec / 1000000.0;
+
   while (true) {
     camera->CaptureFrame();
     Image* rgb_image = LinuxCamera::GetInstance()->fbuffer->m_RGBFrame;
@@ -156,6 +155,11 @@ int main(void) {
     }
 
     streamer->send_image(rgb_image);
+
+    gettimeofday(&tval, NULL);
+    double curtime = tval.tv_sec + tval.tv_usec / 1000000.0;
+    printf("FPS: % 2d\n",  (int) (1 / (curtime - prevtime)));
+    prevtime = curtime;
   }
   return 0;
 }
