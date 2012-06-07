@@ -100,10 +100,6 @@ public:
   void printHammingDistances() const;
 
   cv::Mat_<byte> makeImage(size_t id) const;
-  void writeAllImages(const std::string& dirpath) const;
-  void writeAllImagesSVG(const std::string& dirpath) const;
-  void writeAllImagesPostScript(const std::string& filepath) const;
-  void writeImageSVG(const std::string& filename, size_t id) const;
 
   cv::Mat getWarp(const TagDetection& det) const;
 
