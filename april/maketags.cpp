@@ -2,6 +2,7 @@
 #include <cairo/cairo.h>
 #include <cairo/cairo-pdf.h>
 
+#include <stdio.h>
 #include <iostream>
 #include <sstream>
 #include <stdlib.h>
