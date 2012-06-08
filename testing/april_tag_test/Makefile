@@ -1,32 +1,53 @@
-TARGET = april_tag_test
+#
+# Makefile for April Tag testing code
+#
+ifeq "$(shell which clang++)" ""
+  CXX = g++
+else
+  CXX = clang++
+endif
 
 INCLUDE_DIRS = -I../../darwin/Linux/include -I../../darwin/Framework/include
 INCLUDE_DIRS += -I../..
-#INCLUDE_DIRS += $(shell pkg-config --cflags opencv)
-#INCLUDE_DIRS += -I/usr/include/opencv2
 
 CXX = g++
-CXXFLAGS += -O -g -DLINUX -Wall $(INCLUDE_DIRS)
-#CXXFLAGS += -O2 -DDEBUG -DLINUX -Wall $(INCLUDE_DIRS)
+CXXFLAGS += -O -g -DLINUX -Wall -Wextra $(INCLUDE_DIRS)
+
 LFLAGS += -lpthread -ljpeg -lrt
 LFLAGS += -L../../april/build -lapriltagcpp
 LFLAGS += $(shell pkg-config --libs opencv)
 
-OBJECTS = main.o
+DARWIN_LIB = darwin.a
+DARWIN_LIB_FILE = ../../darwin/Linux/lib/darwin.a
 
-all: $(TARGET)
+INCLUDES =
+OBJECTS =
 
-clean:
-	rm -f *.a *.o $(TARGET) core *~ *.so *.lo
+TARGETS = explorer
 
-darwin.a:
+all: $(TARGETS)
+
+$(DARWIN_LIB):
 	make -C ../../darwin/Linux/build
 
-$(TARGET): darwin.a $(OBJECTS)
-	$(CXX) $(CFLAGS) $(OBJECTS) ../../darwin/Linux/lib/darwin.a -o $(TARGET) $(LFLAGS)
-	chmod 755 $(TARGET)
+$(OBJECTS): %.o: %.cpp %.hpp $(INCLUDES)
+	$(CXX) $(CXXFLAGS) -c $<
 
-# useful to make a backup "make tgz"
-tgz: clean
+$(TARGETS): %: %.cpp $(DARWIN_LIB) $(OBJECTS) $(INCLUDES)
+	$(CXX) $(CXXFLAGS) $@.cpp $(OBJECTS) $(DARWIN_LIB_FILE) \
+	    -o $@ $(LFLAGS)
+
+clean-junk:
+	rm -f *.a *.o *~ *.so *.lo $.dSYM
+
+clean: clean-junk
+	rm -f $(TARGETS)
+
+publish: $(TARGETS) clean-junk
+
+backup: clean
 	mkdir -p backups
-	tar czvf ./backups/$(TARGET)_`date +"%Y_%m_%d_%H.%M.%S"`.tgz --exclude backups *
+	tar czvf ./backups/$(TARGET)_`date +"%Y_%m_%d_%H.%M.%S"`.tgz \
+	    --exclude backups *
+
+.PHONY: clean-junk clean publish backup
