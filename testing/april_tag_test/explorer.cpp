@@ -38,7 +38,7 @@ static const rgb_color TAG_RING_DEFAULT_COLOR = TAG_RING_DEFAULT_COLOR_RGB;
 
 void print_tag_detection_info(const TagDetection& d) {
   std::cout << "Found tag id: " << d.id << std::endl;
-  at::Mat r, t;
+  cv::Mat_<double> r, t;
   static const double f = DARWIN_FOCAL_LENGTH;
   CameraUtil::homographyToPoseCV(f, f, DEFAULT_TAG_SIZE,
 				 d.homography, r, t);
@@ -129,40 +129,21 @@ void Explorer::InitializeMotionModules() {
   head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 8);
   MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
   manager->SetEnable(true);
+  head->MoveByAngle(0, 40);
 }
 
 void Explorer::Process() {
   LinuxCamera::GetInstance()->CaptureFrame();
   Image* rgb_image = LinuxCamera::GetInstance()->fbuffer->m_RGBFrame;
-  unsigned char* raw_frame = rgb_image->m_ImageData;
-  cv::Mat frame(Camera::HEIGHT, Camera::WIDTH, CV_8UC3, raw_frame);
   TagDetectionArray detections;
-  tag_detector_.process(frame, kOpticalCenter, detections);
-  if (REPORT_TAG_TIMING) TagDetector::reportTimers();
+  FindDetections(rgb_image, &detections);
 
   static bool found_tag = false;
   if (detections.size() >= 1) {
     // We found a tag - make an excited noise if this is a change.
     if (!found_tag) LinuxActionScript::PlayMP3(TAG_FOUND_MP3_FILE);
     found_tag = true;
-    size_t min_id = detections[0].id;
-    Point2D min_center;
-    // Print info on each detected tag and mark it on the image.
-    for (size_t i = 0; i < detections.size(); ++i) {
-      TagDetection& d = detections[i];
-      print_tag_detection_info(d);
-      Point2D tag_center(d.cxy.x, d.cxy.y);
-      min_id = std::min(min_id, d.id);
-      if (d.id == min_id) min_center = tag_center;
-      static rgb_color blue = {0, 0, 255};
-      mark_point_on_image(tag_center, rgb_image, blue);
-    }
-    // Highlight the lowest-id tag and set the Darwin's head to track it.
-    current_goal_ = min_center;
-    tracker_.Process(current_goal_);
-    static rgb_color green = {0, 255, 0};
-    mark_point_on_image(min_center, rgb_image, green);
-
+    ProcessDetections(detections, rgb_image);
   } else {
     // We didn't find a tag - make a sad noise if this is a change.
     if (found_tag) LinuxActionScript::PlayMP3(TAG_LOST_MP3_FILE);
@@ -177,6 +158,78 @@ void Explorer::Process() {
     exit(1);
   }
   streamer_->send_image(rgb_image);
+}
+
+void Explorer::FindDetections(const Image* camera_image,
+		    TagDetectionArray* detections) {
+  unsigned char* raw_frame = camera_image->m_ImageData;
+  cv::Mat frame(Camera::HEIGHT, Camera::WIDTH, CV_8UC3, raw_frame);
+  tag_detector_.process(frame, kOpticalCenter, *detections);
+  if (REPORT_TAG_TIMING) TagDetector::reportTimers();
+}
+
+Explorer::TagInfoMap Explorer::ProcessDetections(
+    const TagDetectionArray& detections, Image* display_image) {
+  Head* head = Head::GetInstance();
+  static const double TILT_OFFSET = 40.0;
+  double pan_angle = head->GetPanAngle();  // Left is positive.
+  double tilt_angle = head->GetTiltAngle() - TILT_OFFSET;  // Up is positive.
+  //  print_double_visually("pan", -180, 180, pan_angle);
+  //  print_double_visually("tilt", -90, 90, tilt_angle);
+  static const double PI = 3.1415926;
+  // Convert to radians, and invert angles to invert the rotations.
+  double p = pan_angle * PI / 180 * -1;
+  double t = tilt_angle * PI / 180 * -1;
+  cv::Mat pan_mat = (cv::Mat_<double>(3, 3) <<
+		     cos(p), -sin(p),      0,
+		     sin(p),  cos(p),      0,
+		          0,       0,      1);
+  cv::Mat tilt_mat = (cv::Mat_<double>(3, 3) <<
+		       cos(t),       0, sin(t),
+		            0,       1,      0,
+		      -sin(t),       0, cos(t));
+  cv::Mat transform = pan_mat * tilt_mat;
+
+  TagInfoMap tagmap;
+  // Print info on each detected tag and mark it on the image.
+  for (size_t i = 0; i < detections.size(); ++i) {
+    const TagDetection& d = detections[i];
+    TagInfo& tag = tagmap[d.id];
+    //print_tag_detection_info(d);
+    tag.id = d.id;
+    tag.center = d.cxy;
+    static const double f = DARWIN_FOCAL_LENGTH;
+    CameraUtil::homographyToPoseCV(f, f, DEFAULT_TAG_SIZE,
+				   d.homography, tag.raw_r, tag.raw_t);
+    tag.head_x =  tag.raw_t[2][0];  // Robot x is forward; camera z is forward.
+    tag.head_y = -tag.raw_t[0][0];  // Robot y is left; camera x is right.
+    tag.head_z = -tag.raw_t[1][0];  // Robot z is up; camera y is down.
+    tag.head_t = (cv::Mat_<double>(3, 1) <<
+		  tag.head_x, tag.head_y, tag.head_z);
+    tag.t = transform * tag.head_t;
+    tag.x = tag.t[0][0];
+    tag.y = tag.t[1][0];
+    tag.z = tag.t[2][0];
+  }
+
+  for (TagInfoMap::iterator it = tagmap.begin(); it != tagmap.end(); ++it) {
+    TagInfo& tag = it->second;
+    std::cout << "Found tag id: " << tag.id << std::endl;
+    print_double_visually("x",  0.0, 2.0, tag.x);
+    print_double_visually("y", -2.0, 2.0, tag.y);
+    print_double_visually("z", -1.0, 1.0, tag.z);
+    Point2D tag_image_center(tag.center.x, tag.center.y);
+    static rgb_color blue = {0, 0, 255};
+    static rgb_color green = {0, 255, 0};
+    bool main_tag = (it == tagmap.begin());
+    mark_point_on_image(tag_image_center, display_image,
+			main_tag ? green : blue);
+    if (main_tag) {
+      current_goal_ = tag_image_center;
+    }
+  }
+  tracker_.Process(current_goal_);
+  return tagmap;
 }
 
 }  // namespace Robot
