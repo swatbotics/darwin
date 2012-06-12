@@ -69,7 +69,6 @@ void mark_point_on_image(const Robot::Point2D& point, Robot::Image* rgb_image,
 
 namespace Robot {
 
-Explorer* Explorer::m_UniqueInstance = NULL;
 const cv::Point2d Explorer::kOpticalCenter(Camera::WIDTH / 2.0,
 					   Camera::HEIGHT / 2.0);
 
@@ -83,43 +82,56 @@ Explorer::Explorer() :
 
 Explorer::~Explorer() {}
 
-Explorer* Explorer::GetInstance() {
-  if (m_UniqueInstance == NULL) {
-    m_UniqueInstance = new Explorer();
-  }
-  return m_UniqueInstance;
-}
-
 void Explorer::Initialize() {
-  printf("\n===== INIT EXPLORER MODULE =====\n\n");
-  change_current_dir();  // To make relative filenames work.
+  printf("\n===== INIT EXPLORER =====\n\n");
 
+  // NOTE: Must initialize camera before framework!
+  InitializeCamera();
+
+  // NOTE: Must initialize streamer before framework!
   streamer_ = new mjpg_streamer(Camera::WIDTH, Camera::HEIGHT);
+
+  InitializeMotionFramework();
+  InitializeMotionModules();
 
   // Initialize April Tag detection code.
   tag_detector_.segDecimate = true;
-
-  // Initialize actual Darwin framework and motion modules.
-  MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
 }
 
-void Explorer::SetupHead() {
+void Explorer::InitializeCamera() {
+  std::cout << "Initializing camera..." << std::endl;
+  minIni* ini = new minIni(INI_FILE_PATH);
+  LinuxCamera* camera = LinuxCamera::GetInstance();
+  camera->Initialize(0);
+  camera->LoadINISettings(ini);
+}
+
+void Explorer::InitializeMotionFramework() {
+  std::cout << "Initializing motion framework..." << std::endl;
+  LinuxCM730* linux_cm730 = new LinuxCM730(U2D_DEV_NAME);
+  CM730* cm730 = new CM730(linux_cm730);
+  MotionManager* manager = MotionManager::GetInstance();
+  if (manager->Initialize(cm730) == false) {
+    printf("Failed to initialize MotionManager!\n");
+    exit(1);
+  }
+  LinuxMotionTimer* motion_timer = new LinuxMotionTimer(manager);
+  motion_timer->Start();
+}
+
+void Explorer::InitializeMotionModules() {
+  std::cout << "Initializing motion modules..." << std::endl;
   MotionManager* manager = MotionManager::GetInstance();
   Head* head = Head::GetInstance();
   manager->AddModule(head);
   head->m_Joint.SetEnableHeadOnly(true, true);
   head->m_Joint.SetPGain(JointData::ID_HEAD_PAN, 8);
   head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 8);
+  MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
+  manager->SetEnable(true);
 }
 
 void Explorer::Process() {
-  //  std::cout << "Process! Goal is: (" << current_goal_.X << ","
-  //	    << current_goal_.Y << ")" << std::endl;
-  //  tracker_.Process(current_goal_);
-}
-
-void Explorer::ProcessImage() {
-  //  std::cout << "ProcessImage()!" << std::endl;
   LinuxCamera::GetInstance()->CaptureFrame();
   Image* rgb_image = LinuxCamera::GetInstance()->fbuffer->m_RGBFrame;
   unsigned char* raw_frame = rgb_image->m_ImageData;

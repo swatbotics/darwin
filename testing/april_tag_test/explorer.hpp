@@ -8,23 +8,21 @@
 #include "mjpg_streamer.h"
 
 #include "BallTracker.h"
-#include "MotionModule.h"
 
 namespace Robot {
 
-class Explorer : public MotionModule {
+class Explorer {
 public:
+  Explorer();
   ~Explorer();
-  static Explorer* GetInstance();
   void Initialize();
   void Process();
-  void ProcessImage();
-  void SetupHead();
 
 private:
   static const cv::Point2d kOpticalCenter;
-  Explorer();
-  static Explorer* m_UniqueInstance;
+  void InitializeCamera();
+  void InitializeMotionFramework();
+  void InitializeMotionModules();
   mjpg_streamer* streamer_;
   TagFamily tag_family_;
   TagDetector tag_detector_;
