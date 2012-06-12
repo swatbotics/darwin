@@ -21,9 +21,9 @@ DARWIN_LIB = darwin.a
 DARWIN_LIB_FILE = ../../darwin/Linux/lib/darwin.a
 
 INCLUDES =
-OBJECTS =
+OBJECTS = explorer.o util.o
 
-TARGETS = explorer
+TARGETS = run_explorer
 
 all: $(TARGETS)
 

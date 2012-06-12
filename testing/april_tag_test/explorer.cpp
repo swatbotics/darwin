@@ -1,20 +1,16 @@
-#include <algorithm>  // For min() and max().
-#include <cmath>
-#include <cstdio>
-#include <libgen.h>  // For dirname().
-#include <string>
-#include <sys/time.h>
-#include <unistd.h>
+#include "explorer.hpp"
+
+#include <iostream>
 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "april/CameraUtil.h"
-#include "april/TagDetector.h"
 
 #include "Camera.h"
-#include "mjpg_streamer.h"
 #include "LinuxDARwIn.h"
+
+#include "util.hpp"
 
 #define INI_FILE_PATH "config.ini"
 #define U2D_DEV_NAME "/dev/ttyUSB0"
@@ -38,70 +34,7 @@
 // Whether to show a timing report for tag detection.
 #define REPORT_TAG_TIMING false
 
-typedef struct {
-  unsigned char R;
-  unsigned char G;
-  unsigned char B;
-} rgb_color;
-
 static const rgb_color TAG_RING_DEFAULT_COLOR = TAG_RING_DEFAULT_COLOR_RGB;
-
-void change_current_dir() {
-  char exepath[1024] = {0};
-  if (readlink("/proc/self/exe", exepath, sizeof(exepath)) != -1) {
-    if (chdir(dirname(exepath)) != 0) {
-      std::cerr << "Error changing directory to: " << exepath << std::endl;
-    }
-  }
-}
-
-double record_elapsed_time() {
-  static double last_time = -1.0;
-  struct timeval tval;
-  gettimeofday(&tval, NULL);
-  double this_time = tval.tv_sec + tval.tv_usec / 1000000.0;
-  double elapsed_time = (last_time < 0) ? 0 : this_time - last_time;
-  last_time = this_time;
-  return elapsed_time;
-}
-
-void initialize_motion_framework() {
-  LinuxCM730* linux_cm730 = new LinuxCM730(U2D_DEV_NAME);
-  CM730* cm730 = new CM730(linux_cm730);
-  MotionManager* manager = MotionManager::GetInstance();
-  if (manager->Initialize(cm730) == false) {
-    printf("Failed to initialize MotionManager!\n");
-    exit(1);
-  }
-  LinuxMotionTimer* motion_timer = new LinuxMotionTimer(manager);
-  motion_timer->Start();
-}
-
-void initialize_motion_modules() {
-  MotionManager* manager = MotionManager::GetInstance();
-  manager->AddModule(Head::GetInstance());
-  MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
-  manager->SetEnable(true);
-  Head* head = Head::GetInstance();
-  head->m_Joint.SetEnableHeadOnly(true, true);
-  head->m_Joint.SetPGain(JointData::ID_HEAD_PAN, 8);
-  head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 8);
-}
-
-void print_double_visually(const char* label, double min, double max,
-			   double value) {
-  if (label != NULL) printf("%s: ", label);
-  static const int meter_width = 50;
-  int bucket = (value - min) * meter_width / (max - min);
-  bucket = std::max(0, bucket);
-  bucket = std::min(meter_width - 1, bucket);
-  printf("% 4.2f [", min);
-  for (int i = 0; i < meter_width; ++i) {
-    printf("%c", (i == bucket) ? '+' : ' ');
-  }
-  printf("] % 4.2f", max);
-  printf(" (%.4f)\n", value);
-}
 
 void print_tag_detection_info(const TagDetection& d) {
   std::cout << "Found tag id: " << d.id << std::endl;
@@ -116,7 +49,7 @@ void print_tag_detection_info(const TagDetection& d) {
   print_double_visually("t_z",  0.0, 2.0, t[2][0]);
 }
 
-void mark_point_on_image(const Point2D& point, Image* rgb_image,
+void mark_point_on_image(const Robot::Point2D& point, Robot::Image* rgb_image,
 			 rgb_color color=TAG_RING_DEFAULT_COLOR) {
   unsigned char* framebuf = rgb_image->m_ImageData;
   for (int i = 0; i < rgb_image->m_NumberOfPixels; i++) {
@@ -134,79 +67,104 @@ void mark_point_on_image(const Point2D& point, Image* rgb_image,
 }
 
 
-int main(void) {
-  printf( "\n===== April Tag Test for DARwIn =====\n\n");
+namespace Robot {
+
+Explorer* Explorer::m_UniqueInstance = NULL;
+const cv::Point2d Explorer::kOpticalCenter(Camera::WIDTH / 2.0,
+					   Camera::HEIGHT / 2.0);
+
+Explorer::Explorer() :
+  streamer_(NULL),
+  tag_family_(DEFAULT_TAG_FAMILY),
+  tag_detector_(tag_family_),
+  tracker_(),
+  current_goal_() {
+}
+
+Explorer::~Explorer() {}
+
+Explorer* Explorer::GetInstance() {
+  if (m_UniqueInstance == NULL) {
+    m_UniqueInstance = new Explorer();
+  }
+  return m_UniqueInstance;
+}
+
+void Explorer::Initialize() {
+  printf("\n===== INIT EXPLORER MODULE =====\n\n");
   change_current_dir();  // To make relative filenames work.
 
-  // Initialize camera-related code.
-  minIni* ini = new minIni(INI_FILE_PATH);
-  LinuxCamera* camera = LinuxCamera::GetInstance();
-  camera->Initialize(0);
-  camera->LoadINISettings(ini);
-  ColorFinder* ball_finder = new ColorFinder();
-  ball_finder->LoadINISettings(ini);
-
-  // Initialize MJPG-Streamer code.
-  httpd::ball_finder = ball_finder;
-  mjpg_streamer* streamer = new mjpg_streamer(Camera::WIDTH, Camera::HEIGHT);
-
-  // Initialize actual Darwin framework and motion modules.
-  initialize_motion_framework();
-  initialize_motion_modules();
-  BallTracker tracker = BallTracker();
+  streamer_ = new mjpg_streamer(Camera::WIDTH, Camera::HEIGHT);
 
   // Initialize April Tag detection code.
-  TagFamily tag_family(DEFAULT_TAG_FAMILY);
-  TagDetector detector(tag_family);
-  detector.segDecimate = true;
-  TagDetectionArray detections;
-  cv::Point2d optical_center(Camera::WIDTH / 2.0, Camera::HEIGHT / 2.0);
+  tag_detector_.segDecimate = true;
 
-  // Start main motion loop and timer.
-  record_elapsed_time();
-  while (true) {
-    // Capture camera frame and process to detect April Tags.
-    camera->CaptureFrame();
-    Image* rgb_image = LinuxCamera::GetInstance()->fbuffer->m_RGBFrame;
-    unsigned char* raw_frame = rgb_image->m_ImageData;
-    cv::Mat frame(Camera::HEIGHT, Camera::WIDTH, CV_8UC3, raw_frame);
-    detector.process(frame, optical_center, detections);
-    if (REPORT_TAG_TIMING) TagDetector::reportTimers();
-
-    static bool found_tag = false;
-    if (detections.size() >= 1) {
-      // We found a tag - make an excited noise if this is a change.
-      if (!found_tag) LinuxActionScript::PlayMP3(TAG_FOUND_MP3_FILE);
-      found_tag = true;
-      size_t min_id = detections[0].id;
-      Point2D min_center;
-      // Print info on each detected tag and mark it on the image.
-      for (size_t i = 0; i < detections.size(); ++i) {
-	TagDetection& d = detections[i];
-	print_tag_detection_info(d);
-	Point2D tag_center(d.cxy.x, d.cxy.y);
-	min_id = std::min(min_id, d.id);
-	if (d.id == min_id) min_center = tag_center;
-	static rgb_color blue = {0, 0, 255};
-	mark_point_on_image(tag_center, rgb_image, blue);
-      }
-      // Highlight the lowest-id tag and set the Darwin's head to track it.
-      tracker.Process(min_center);
-      static rgb_color green = {0, 255, 0};
-      mark_point_on_image(min_center, rgb_image, green);
-
-    } else {
-      // We didn't find a tag - make a sad noise if this is a change.
-      if (found_tag) LinuxActionScript::PlayMP3(TAG_LOST_MP3_FILE);
-      found_tag = false;
-    }
-
-    // Send the modified camera image to streaming server.
-    streamer->send_image(rgb_image);
-
-    // Compute and print current frames-per-second value.
-    double frame_time = record_elapsed_time();
-    printf("FPS: % 2d\n",  (int) (1 / frame_time));
-  }
-  return 0;
+  // Initialize actual Darwin framework and motion modules.
+  MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
 }
+
+void Explorer::SetupHead() {
+  MotionManager* manager = MotionManager::GetInstance();
+  Head* head = Head::GetInstance();
+  manager->AddModule(head);
+  head->m_Joint.SetEnableHeadOnly(true, true);
+  head->m_Joint.SetPGain(JointData::ID_HEAD_PAN, 8);
+  head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 8);
+}
+
+void Explorer::Process() {
+  //  std::cout << "Process! Goal is: (" << current_goal_.X << ","
+  //	    << current_goal_.Y << ")" << std::endl;
+  //  tracker_.Process(current_goal_);
+}
+
+void Explorer::ProcessImage() {
+  //  std::cout << "ProcessImage()!" << std::endl;
+  LinuxCamera::GetInstance()->CaptureFrame();
+  Image* rgb_image = LinuxCamera::GetInstance()->fbuffer->m_RGBFrame;
+  unsigned char* raw_frame = rgb_image->m_ImageData;
+  cv::Mat frame(Camera::HEIGHT, Camera::WIDTH, CV_8UC3, raw_frame);
+  TagDetectionArray detections;
+  tag_detector_.process(frame, kOpticalCenter, detections);
+  if (REPORT_TAG_TIMING) TagDetector::reportTimers();
+
+  static bool found_tag = false;
+  if (detections.size() >= 1) {
+    // We found a tag - make an excited noise if this is a change.
+    if (!found_tag) LinuxActionScript::PlayMP3(TAG_FOUND_MP3_FILE);
+    found_tag = true;
+    size_t min_id = detections[0].id;
+    Point2D min_center;
+    // Print info on each detected tag and mark it on the image.
+    for (size_t i = 0; i < detections.size(); ++i) {
+      TagDetection& d = detections[i];
+      print_tag_detection_info(d);
+      Point2D tag_center(d.cxy.x, d.cxy.y);
+      min_id = std::min(min_id, d.id);
+      if (d.id == min_id) min_center = tag_center;
+      static rgb_color blue = {0, 0, 255};
+      mark_point_on_image(tag_center, rgb_image, blue);
+    }
+    // Highlight the lowest-id tag and set the Darwin's head to track it.
+    current_goal_ = min_center;
+    tracker_.Process(current_goal_);
+    static rgb_color green = {0, 255, 0};
+    mark_point_on_image(min_center, rgb_image, green);
+
+  } else {
+    // We didn't find a tag - make a sad noise if this is a change.
+    if (found_tag) LinuxActionScript::PlayMP3(TAG_LOST_MP3_FILE);
+    found_tag = false;
+    static const Point2D& no_goal_value = Point2D(-1, -1);
+    current_goal_ = no_goal_value;
+  }
+
+  // Send the modified camera image to streaming server.
+  if (streamer_ == NULL) {
+    std::cerr << "mjpg-streamer not initialized!" << std::endl;
+    exit(1);
+  }
+  streamer_->send_image(rgb_image);
+}
+
+}  // namespace Robot
