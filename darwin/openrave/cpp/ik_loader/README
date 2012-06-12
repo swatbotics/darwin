@@ -1,0 +1,2 @@
+http://openrave.programmingvision.com/en/coreapihtml/ikfastloader_8cpp-example.html
+Code modified based on the above link to load IK using cpp. This method cannot work without having openrave installed on the computer.

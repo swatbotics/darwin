@@ -1,0 +1,4 @@
+This is an example of loading the generated IK c++ file, and using it to find solutions to an IK problem.
+
+The ik.cpp is the generated c++ fi
+le. main.cpp uses it and displays the output. ik.cpp can also be compiled by itself to achive more or less the same thing.
