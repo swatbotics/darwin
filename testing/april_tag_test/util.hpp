@@ -8,7 +8,7 @@ typedef struct {
 } rgb_color;
 
 void print_double_visually(const char* label, double min, double max,
-			   double value);
+                           double value);
 
 double record_elapsed_time();
 

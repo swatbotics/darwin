@@ -14,13 +14,13 @@
 namespace Robot {
 
 class Explorer {
-public:
+ public:
   Explorer();
   ~Explorer();
   void Initialize();
   void Process();
 
-private:
+ private:
   typedef struct {
     size_t id;
     cv::Point_<double> center;
@@ -42,9 +42,9 @@ private:
   void InitializeMotionFramework();
   void InitializeMotionModules();
   void FindDetections(const Image* camera_image,
-		      TagDetectionArray* detections);
+                      TagDetectionArray* detections);
   TagInfoMap ProcessDetections(const TagDetectionArray& detections,
-			       Image* display_image);
+                               Image* display_image);
   mjpg_streamer* streamer_;
   TagFamily tag_family_;
   TagDetector tag_detector_;

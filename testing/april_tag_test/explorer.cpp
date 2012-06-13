@@ -41,7 +41,7 @@ void print_tag_detection_info(const TagDetection& d) {
   cv::Mat_<double> r, t;
   static const double f = DARWIN_FOCAL_LENGTH;
   CameraUtil::homographyToPoseCV(f, f, DEFAULT_TAG_SIZE,
-				 d.homography, r, t);
+                                 d.homography, r, t);
   std::cout << "r = " << r << std::endl;
   std::cout << "t = " << t << std::endl;
   print_double_visually("t_x", -0.5, 0.5, t[0][0]);
@@ -50,14 +50,14 @@ void print_tag_detection_info(const TagDetection& d) {
 }
 
 void mark_point_on_image(const Robot::Point2D& point, Robot::Image* rgb_image,
-			 rgb_color color=TAG_RING_DEFAULT_COLOR) {
+                         rgb_color color=TAG_RING_DEFAULT_COLOR) {
   unsigned char* framebuf = rgb_image->m_ImageData;
   for (int i = 0; i < rgb_image->m_NumberOfPixels; i++) {
     int x = i % rgb_image->m_Width;
     int y = i / rgb_image->m_Width;
     int dist = sqrt(pow(x - point.X, 2) + pow(y - point.Y, 2));
     if (dist >= TAG_RING_RADIUS &&
-	dist <= TAG_RING_RADIUS + TAG_RING_THICKNESS) {
+        dist <= TAG_RING_RADIUS + TAG_RING_THICKNESS) {
       size_t offset = i * rgb_image->m_PixelSize;
       framebuf[offset + 0] = color.R;
       framebuf[offset + 1] = color.G;
@@ -70,7 +70,7 @@ void mark_point_on_image(const Robot::Point2D& point, Robot::Image* rgb_image,
 namespace Robot {
 
 const cv::Point2d Explorer::kOpticalCenter(Camera::WIDTH / 2.0,
-					   Camera::HEIGHT / 2.0);
+                                           Camera::HEIGHT / 2.0);
 
 Explorer::Explorer() :
   streamer_(NULL),
@@ -161,7 +161,7 @@ void Explorer::Process() {
 }
 
 void Explorer::FindDetections(const Image* camera_image,
-		    TagDetectionArray* detections) {
+                              TagDetectionArray* detections) {
   unsigned char* raw_frame = camera_image->m_ImageData;
   cv::Mat frame(Camera::HEIGHT, Camera::WIDTH, CV_8UC3, raw_frame);
   tag_detector_.process(frame, kOpticalCenter, *detections);
@@ -181,13 +181,13 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
   double p = pan_angle * PI / 180 * -1;
   double t = tilt_angle * PI / 180 * -1;
   cv::Mat pan_mat = (cv::Mat_<double>(3, 3) <<
-		     cos(p), -sin(p),      0,
-		     sin(p),  cos(p),      0,
-		          0,       0,      1);
+                     cos(p), -sin(p),      0,
+                     sin(p),  cos(p),      0,
+                          0,       0,      1);
   cv::Mat tilt_mat = (cv::Mat_<double>(3, 3) <<
-		       cos(t),       0, sin(t),
-		            0,       1,      0,
-		      -sin(t),       0, cos(t));
+                       cos(t),       0, sin(t),
+                            0,       1,      0,
+                      -sin(t),       0, cos(t));
   cv::Mat transform = pan_mat * tilt_mat;
 
   TagInfoMap tagmap;
@@ -200,12 +200,12 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
     tag.center = d.cxy;
     static const double f = DARWIN_FOCAL_LENGTH;
     CameraUtil::homographyToPoseCV(f, f, DEFAULT_TAG_SIZE,
-				   d.homography, tag.raw_r, tag.raw_t);
+                                   d.homography, tag.raw_r, tag.raw_t);
     tag.head_x =  tag.raw_t[2][0];  // Robot x is forward; camera z is forward.
     tag.head_y = -tag.raw_t[0][0];  // Robot y is left; camera x is right.
     tag.head_z = -tag.raw_t[1][0];  // Robot z is up; camera y is down.
     tag.head_t = (cv::Mat_<double>(3, 1) <<
-		  tag.head_x, tag.head_y, tag.head_z);
+                  tag.head_x, tag.head_y, tag.head_z);
     tag.t = transform * tag.head_t;
     tag.x = tag.t[0][0];
     tag.y = tag.t[1][0];
@@ -223,7 +223,7 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
     static rgb_color green = {0, 255, 0};
     bool main_tag = (it == tagmap.begin());
     mark_point_on_image(tag_image_center, display_image,
-			main_tag ? green : blue);
+                        main_tag ? green : blue);
     if (main_tag) {
       current_goal_ = tag_image_center;
     }

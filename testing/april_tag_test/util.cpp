@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 void print_double_visually(const char* label, double min, double max,
-			   double value) {
+                           double value) {
   if (label != NULL) printf("%s: ", label);
   static const int kMeterWidth = 50;
   int bucket = (value - min) * kMeterWidth / (max - min);
