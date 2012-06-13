@@ -1,5 +1,6 @@
 #include "explorer.hpp"
 
+#include <cmath>
 #include <iostream>
 
 #include <opencv2/highgui/highgui.hpp>
@@ -20,7 +21,7 @@
 
 // Params specifying the tags to look for.
 #define DEFAULT_TAG_FAMILY "Tag36h11"
-#define DEFAULT_TAG_SIZE 0.1905  // In meters.
+#define DEFAULT_TAG_SIZE 0.05 //0.1905  // In meters.
 
 // Paths to MP3 files to play amusing noises when discovering tags.
 #define TAG_FOUND_MP3_FILE "../../darwin/Data/mp3/Wow.mp3"
@@ -34,20 +35,8 @@
 // Whether to show a timing report for tag detection.
 #define REPORT_TAG_TIMING false
 
+//static const double PI = 3.1415926;
 static const rgb_color TAG_RING_DEFAULT_COLOR = TAG_RING_DEFAULT_COLOR_RGB;
-
-void print_tag_detection_info(const TagDetection& d) {
-  std::cout << "Found tag id: " << d.id << std::endl;
-  cv::Mat_<double> r, t;
-  static const double f = DARWIN_FOCAL_LENGTH;
-  CameraUtil::homographyToPoseCV(f, f, DEFAULT_TAG_SIZE,
-                                 d.homography, r, t);
-  std::cout << "r = " << r << std::endl;
-  std::cout << "t = " << t << std::endl;
-  print_double_visually("t_x", -0.5, 0.5, t[0][0]);
-  print_double_visually("t_y", -0.5, 0.5, t[1][0]);
-  print_double_visually("t_z",  0.0, 2.0, t[2][0]);
-}
 
 void mark_point_on_image(const Robot::Point2D& point, Robot::Image* rgb_image,
                          rgb_color color=TAG_RING_DEFAULT_COLOR) {
@@ -73,11 +62,12 @@ const cv::Point2d Explorer::kOpticalCenter(Camera::WIDTH / 2.0,
                                            Camera::HEIGHT / 2.0);
 
 Explorer::Explorer() :
-  streamer_(NULL),
-  tag_family_(DEFAULT_TAG_FAMILY),
-  tag_detector_(tag_family_),
-  tracker_(),
-  current_goal_() {
+    cm730_(NULL),
+    streamer_(NULL),
+    tag_family_(DEFAULT_TAG_FAMILY),
+    tag_detector_(tag_family_),
+    tracker_(),
+    current_goal_() {
 }
 
 Explorer::~Explorer() {}
@@ -91,11 +81,16 @@ void Explorer::Initialize() {
   // NOTE: Must initialize streamer before framework!
   streamer_ = new mjpg_streamer(Camera::WIDTH, Camera::HEIGHT);
 
-  InitializeMotionFramework();
-  InitializeMotionModules();
-
   // Initialize April Tag detection code.
   tag_detector_.segDecimate = true;
+
+  InitializeMotionFramework();
+  InitializeMotionModules();
+  /*
+  printf("Initialize robot position? (hit enter) ");
+  getchar();
+  InitializeRobotPosition();
+  */
 }
 
 void Explorer::InitializeCamera() {
@@ -109,9 +104,9 @@ void Explorer::InitializeCamera() {
 void Explorer::InitializeMotionFramework() {
   std::cout << "Initializing motion framework..." << std::endl;
   LinuxCM730* linux_cm730 = new LinuxCM730(U2D_DEV_NAME);
-  CM730* cm730 = new CM730(linux_cm730);
+  cm730_ = new CM730(linux_cm730);
   MotionManager* manager = MotionManager::GetInstance();
-  if (manager->Initialize(cm730) == false) {
+  if (manager->Initialize(cm730_) == false) {
     printf("Failed to initialize MotionManager!\n");
     exit(1);
   }
@@ -123,13 +118,37 @@ void Explorer::InitializeMotionModules() {
   std::cout << "Initializing motion modules..." << std::endl;
   MotionManager* manager = MotionManager::GetInstance();
   Head* head = Head::GetInstance();
+  Walking* walker = Walking::GetInstance();
   manager->AddModule(head);
+  manager->AddModule(walker);
   head->m_Joint.SetEnableHeadOnly(true, true);
   head->m_Joint.SetPGain(JointData::ID_HEAD_PAN, 8);
   head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 8);
-  MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
+  //  MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
+  walker->m_Joint.SetEnableBodyWithoutHead(true, true);
   manager->SetEnable(true);
+}
+
+void Explorer::InitializeRobotPosition() {
+  Head* head = Head::GetInstance();
   head->MoveByAngle(0, 40);
+
+  int n = 0;
+  int param[JointData::NUMBER_OF_JOINTS * 5];
+  int wGoalPosition, wStartPosition, wDistance;
+  for(int id = JointData::ID_R_SHOULDER_PITCH;
+      id < JointData::NUMBER_OF_JOINTS; ++id) {
+    wStartPosition = MotionStatus::m_CurrentJoints.GetValue(id);
+    wGoalPosition = Walking::GetInstance()->m_Joint.GetValue(id);
+    wDistance = abs(wStartPosition - wGoalPosition) >> 2;
+    if (wDistance < 8) wDistance = 8;
+    param[n++] = id;
+    param[n++] = CM730::GetLowByte(wGoalPosition);
+    param[n++] = CM730::GetHighByte(wGoalPosition);
+    param[n++] = CM730::GetLowByte(wDistance);
+    param[n++] = CM730::GetHighByte(wDistance);
+  }
+  cm730_->SyncWrite(MX28::P_GOAL_POSITION_L, 5, JointData::NUMBER_OF_JOINTS - 1, param);
 }
 
 void Explorer::Process() {
@@ -143,13 +162,17 @@ void Explorer::Process() {
     // We found a tag - make an excited noise if this is a change.
     if (!found_tag) LinuxActionScript::PlayMP3(TAG_FOUND_MP3_FILE);
     found_tag = true;
-    ProcessDetections(detections, rgb_image);
+    TagInfoMap map = ProcessDetections(detections, rgb_image);
+    MoveToGoal(map.begin()->second);
   } else {
     // We didn't find a tag - make a sad noise if this is a change.
     if (found_tag) LinuxActionScript::PlayMP3(TAG_LOST_MP3_FILE);
     found_tag = false;
+    /*
     static const Point2D& no_goal_value = Point2D(-1, -1);
     current_goal_ = no_goal_value;
+    */
+    LookForGoal();
   }
 
   // Send the modified camera image to streaming server.
@@ -176,10 +199,9 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
   double tilt_angle = head->GetTiltAngle() - TILT_OFFSET;  // Up is positive.
   //  print_double_visually("pan", -180, 180, pan_angle);
   //  print_double_visually("tilt", -90, 90, tilt_angle);
-  static const double PI = 3.1415926;
   // Convert to radians, and invert angles to invert the rotations.
-  double p = pan_angle * PI / 180 * -1;
-  double t = tilt_angle * PI / 180 * -1;
+  double p = pan_angle * M_PI / 180 * -1;
+  double t = tilt_angle * M_PI / 180 * -1;
   cv::Mat pan_mat = (cv::Mat_<double>(3, 3) <<
                      cos(p), -sin(p),      0,
                      sin(p),  cos(p),      0,
@@ -195,7 +217,6 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
   for (size_t i = 0; i < detections.size(); ++i) {
     const TagDetection& d = detections[i];
     TagInfo& tag = tagmap[d.id];
-    //print_tag_detection_info(d);
     tag.id = d.id;
     tag.center = d.cxy;
     static const double f = DARWIN_FOCAL_LENGTH;
@@ -226,10 +247,62 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
                         main_tag ? green : blue);
     if (main_tag) {
       current_goal_ = tag_image_center;
+      tracker_.Process(current_goal_);
     }
   }
-  tracker_.Process(current_goal_);
   return tagmap;
+}
+
+void Explorer::MoveToGoal(const TagInfo& goal_tag) {
+  static const double kXLimClose = 0.1;
+  static const double kXLimFar = 0.2;
+  static const double kYLimLeft = -0.05;
+  static const double kYLimRight = 0.05;
+  bool at_goal = (in_range(goal_tag.x, kXLimClose, kXLimFar) &&
+                  in_range(goal_tag.y, kYLimLeft, kYLimRight));
+  Walking* walker = Walking::GetInstance();
+  if (at_goal) {
+    walker->X_MOVE_AMPLITUDE = 0.0;
+    walker->A_MOVE_AMPLITUDE = 0.0;
+    walker->Stop();
+    std::cout << "STOPPING WALKER (Reached goal!)" << std::endl;
+  } else {
+    if (goal_tag.x < kXLimClose) {
+      walker->X_MOVE_AMPLITUDE = -5.0;
+      walker->A_MOVE_AMPLITUDE = 0.0;
+    } else {
+      double goal_angle = atan2(goal_tag.y, goal_tag.x);
+      double goal_angle_deg = goal_angle * 180 / M_PI;
+      double goal_angle_sign = copysign(1.0, goal_angle_deg);
+      printf("GOAL ANGLE: %f\n", goal_angle_deg);
+
+      if (in_range(goal_angle_deg, -10, 10)) {
+        walker->X_MOVE_AMPLITUDE = 10.0;
+        walker->A_MOVE_AMPLITUDE = 0.0;
+      } else {
+        walker->X_MOVE_AMPLITUDE = 0.0;
+        walker->A_MOVE_AMPLITUDE = 15.0 * -goal_angle_sign;
+      }
+    }
+    if (!walker->IsRunning()) {
+      walker->Start();
+      std::cout << "STARTING WALKER" << std::endl;
+    }
+  }
+  printf("WALKER PARAMS: X = %f, A = %f\n",
+         walker->X_MOVE_AMPLITUDE, walker->A_MOVE_AMPLITUDE);
+}
+
+void Explorer::LookForGoal() {
+  Head::GetInstance()->MoveToHome();
+  Walking* walker = Walking::GetInstance();
+  double direction_guess = (current_goal_.X < kOpticalCenter.x ? 1.0 : -1.0);
+  walker->X_MOVE_AMPLITUDE = 0.0;
+  walker->A_MOVE_AMPLITUDE = 15.0 * direction_guess;
+  if (!walker->IsRunning()) {
+    walker->Start();
+  }
+  std::cout << "PAUSING WALKER (Waiting for goal)" << std::endl;
 }
 
 }  // namespace Robot

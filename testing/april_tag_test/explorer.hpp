@@ -10,6 +10,7 @@
 #include "mjpg_streamer.h"
 
 #include "BallTracker.h"
+#include "CM730.h"
 
 namespace Robot {
 
@@ -41,10 +42,14 @@ class Explorer {
   void InitializeCamera();
   void InitializeMotionFramework();
   void InitializeMotionModules();
+  void InitializeRobotPosition();
   void FindDetections(const Image* camera_image,
                       TagDetectionArray* detections);
   TagInfoMap ProcessDetections(const TagDetectionArray& detections,
                                Image* display_image);
+  void MoveToGoal(const TagInfo& goal_tag);
+  void LookForGoal();
+  CM730* cm730_;
   mjpg_streamer* streamer_;
   TagFamily tag_family_;
   TagDetector tag_detector_;
