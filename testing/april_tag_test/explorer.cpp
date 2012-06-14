@@ -85,12 +85,12 @@ void Explorer::Initialize() {
   tag_detector_.segDecimate = true;
 
   InitializeMotionFramework();
-  InitializeMotionModules();
-  /*
   printf("Initialize robot position? (hit enter) ");
   getchar();
   InitializeRobotPosition();
-  */
+  InitializeMotionModules();
+  printf("Start walking mode? (hit enter) ");
+  getchar();
 }
 
 void Explorer::InitializeCamera() {
@@ -136,8 +136,8 @@ void Explorer::InitializeRobotPosition() {
   int n = 0;
   int param[JointData::NUMBER_OF_JOINTS * 5];
   int wGoalPosition, wStartPosition, wDistance;
-  for(int id = JointData::ID_R_SHOULDER_PITCH;
-      id < JointData::NUMBER_OF_JOINTS; ++id) {
+  for (int id = JointData::ID_R_SHOULDER_PITCH;
+       id < JointData::NUMBER_OF_JOINTS; ++id) {
     wStartPosition = MotionStatus::m_CurrentJoints.GetValue(id);
     wGoalPosition = Walking::GetInstance()->m_Joint.GetValue(id);
     wDistance = abs(wStartPosition - wGoalPosition) >> 2;
@@ -148,7 +148,12 @@ void Explorer::InitializeRobotPosition() {
     param[n++] = CM730::GetLowByte(wDistance);
     param[n++] = CM730::GetHighByte(wDistance);
   }
-  cm730_->SyncWrite(MX28::P_GOAL_POSITION_L, 5, JointData::NUMBER_OF_JOINTS - 1, param);
+  if (cm730_ == NULL) {
+    std::cerr << "CM730 is not initialized!" << std::endl;
+    exit(1);
+  }
+  cm730_->SyncWrite(MX28::P_GOAL_POSITION_L, 5,
+                    JointData::NUMBER_OF_JOINTS - 1, param);
 }
 
 void Explorer::Process() {
