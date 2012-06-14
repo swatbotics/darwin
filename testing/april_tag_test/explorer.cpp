@@ -26,6 +26,7 @@
 // Paths to MP3 files to play amusing noises when discovering tags.
 #define TAG_FOUND_MP3_FILE "../../darwin/Data/mp3/Wow.mp3"
 #define TAG_LOST_MP3_FILE "../../darwin/Data/mp3/Oops.mp3"
+#define REACHED_GOAL_MP3_FILE "../../darwin/Data/mp3/Yes.mp3"
 
 // Params for marking a ring around detected tags.
 #define TAG_RING_RADIUS 20  // In pixels.
@@ -163,12 +164,17 @@ void Explorer::Process() {
   FindDetections(rgb_image, &detections);
 
   static bool found_tag = false;
+  static bool at_goal = false;
   if (detections.size() >= 1) {
     // We found a tag - make an excited noise if this is a change.
     if (!found_tag) LinuxActionScript::PlayMP3(TAG_FOUND_MP3_FILE);
     found_tag = true;
     TagInfoMap map = ProcessDetections(detections, rgb_image);
-    MoveToGoal(map.begin()->second);
+    bool reached_goal = MoveToGoal(map.begin()->second);
+    if (reached_goal && !at_goal) {
+      LinuxActionScript::PlayMP3(REACHED_GOAL_MP3_FILE);
+    }
+    at_goal = reached_goal;
   } else {
     // We didn't find a tag - make a sad noise if this is a change.
     if (found_tag) LinuxActionScript::PlayMP3(TAG_LOST_MP3_FILE);
@@ -258,7 +264,7 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
   return tagmap;
 }
 
-void Explorer::MoveToGoal(const TagInfo& goal_tag) {
+bool Explorer::MoveToGoal(const TagInfo& goal_tag) {
   static const double kXLimClose = 0.1;
   static const double kXLimFar = 0.2;
   static const double kYLimLeft = -0.05;
@@ -271,6 +277,7 @@ void Explorer::MoveToGoal(const TagInfo& goal_tag) {
     walker->A_MOVE_AMPLITUDE = 0.0;
     walker->Stop();
     std::cout << "STOPPING WALKER (Reached goal!)" << std::endl;
+    return true;
   } else {
     if (goal_tag.x < kXLimClose) {
       walker->X_MOVE_AMPLITUDE = -5.0;
@@ -296,6 +303,7 @@ void Explorer::MoveToGoal(const TagInfo& goal_tag) {
   }
   printf("WALKER PARAMS: X = %f, A = %f\n",
          walker->X_MOVE_AMPLITUDE, walker->A_MOVE_AMPLITUDE);
+  return false;
 }
 
 void Explorer::LookForGoal() {

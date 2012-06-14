@@ -47,7 +47,7 @@ class Explorer {
                       TagDetectionArray* detections);
   TagInfoMap ProcessDetections(const TagDetectionArray& detections,
                                Image* display_image);
-  void MoveToGoal(const TagInfo& goal_tag);
+  bool MoveToGoal(const TagInfo& goal_tag);
   void LookForGoal();
   CM730* cm730_;
   mjpg_streamer* streamer_;
