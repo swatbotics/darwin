@@ -14,7 +14,7 @@ double record_elapsed_time();
 
 void change_current_dir();
 
-static bool in_range(double value, double min, double max) {
+inline bool in_range(double value, double min, double max) {
   return min <= value && value <= max;
 }
 
