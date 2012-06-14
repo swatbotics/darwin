@@ -307,6 +307,7 @@ bool Explorer::MoveToGoal(const TagInfo& goal_tag) {
 }
 
 void Explorer::LookForGoal() {
+  /*
   Head::GetInstance()->MoveToHome();
   Walking* walker = Walking::GetInstance();
   double direction_guess = (current_goal_.X < kOpticalCenter.x ? 1.0 : -1.0);
@@ -315,6 +316,22 @@ void Explorer::LookForGoal() {
   if (!walker->IsRunning()) {
     walker->Start();
   }
+  */
+  Walking* walker = Walking::GetInstance();
+  walker->X_MOVE_AMPLITUDE = 0.0;
+  walker->A_MOVE_AMPLITUDE = 0.0;
+  walker->Stop();
+  static const double kPanRate = 1.0;
+  static const double kLimitPercentage = 0.95;
+  static const double kScanTiltAngle = 40.0;
+  Head* head = Head::GetInstance();
+  static double direction = (current_goal_.X < kOpticalCenter.x ? 1.0 : -1.0);
+  double angle = head->GetPanAngle();
+  double new_angle = angle + direction * kPanRate;
+  if (new_angle <= head->GetRightLimitAngle()) direction = 1;
+  if (new_angle >= head->GetLeftLimitAngle()) direction = -1;
+  new_angle = angle + direction * kPanRate;
+  head->MoveByAngle(new_angle, kScanTiltAngle);
   std::cout << "PAUSING WALKER (Waiting for goal)" << std::endl;
 }
 
