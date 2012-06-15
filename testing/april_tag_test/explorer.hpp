@@ -46,8 +46,8 @@ class Explorer {
   void FindDetections(const Image* camera_image,
                       TagDetectionArray* detections);
   TagInfoMap ProcessDetections(const TagDetectionArray& detections,
-                               Image* display_image);
-  bool MoveToGoal(const TagInfo& goal_tag);
+                               size_t goal_tag_id, Image* display_image);
+  bool MoveToGoal(const cv::Point2d& goal);
   void LookForGoal();
   CM730* cm730_;
   mjpg_streamer* streamer_;

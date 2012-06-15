@@ -163,14 +163,21 @@ void Explorer::Process() {
 
   static bool found_tag = false;
   static bool at_goal = false;
-  if (detections.size() >= 1) {
+  static size_t goal_tag_id = 0;  // Make this smarter?
+  TagInfoMap tag_map = ProcessDetections(detections, goal_tag_id, rgb_image);
+  if (tag_map.count(goal_tag_id) > 0) {
     // We found a tag - make an excited noise if this is a change.
     if (!found_tag) LinuxActionScript::PlayMP3(TAG_FOUND_MP3_FILE);
     found_tag = true;
-    TagInfoMap map = ProcessDetections(detections, rgb_image);
-    bool reached_goal = MoveToGoal(map.begin()->second);
+    cv::Point2d goal_point(tag_map[goal_tag_id].x, tag_map[goal_tag_id].y);
+    bool reached_goal = MoveToGoal(goal_point);
     if (reached_goal && !at_goal) {
       LinuxActionScript::PlayMP3(REACHED_GOAL_MP3_FILE);
+      usleep(10 * 1000);
+      printf("\nReached goal tag %d! Continue? (hit enter) ", goal_tag_id);
+      getchar();
+      ++goal_tag_id;
+      found_tag = false;
     }
     at_goal = reached_goal;
   } else {
@@ -197,7 +204,8 @@ void Explorer::FindDetections(const Image* camera_image,
 }
 
 Explorer::TagInfoMap Explorer::ProcessDetections(
-    const TagDetectionArray& detections, Image* display_image) {
+    const TagDetectionArray& detections, size_t goal_tag_id,
+    Image* display_image) {
   Head* head = Head::GetInstance();
   static const double TILT_OFFSET = 40.0;
   double pan_angle = head->GetPanAngle();  // Left is positive.
@@ -217,11 +225,11 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
                       -sin(t),       0, cos(t));
   cv::Mat transform = pan_mat * tilt_mat;
 
-  TagInfoMap tagmap;
+  TagInfoMap tag_map;
   // Print info on each detected tag and mark it on the image.
   for (size_t i = 0; i < detections.size(); ++i) {
     const TagDetection& d = detections[i];
-    TagInfo& tag = tagmap[d.id];
+    TagInfo& tag = tag_map[d.id];
     tag.id = d.id;
     tag.center = d.cxy;
     static const double f = DARWIN_FOCAL_LENGTH;
@@ -238,7 +246,7 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
     tag.z = tag.t[2][0];
   }
 
-  for (TagInfoMap::iterator it = tagmap.begin(); it != tagmap.end(); ++it) {
+  for (TagInfoMap::iterator it = tag_map.begin(); it != tag_map.end(); ++it) {
     TagInfo& tag = it->second;
     std::cout << "Found tag id: " << tag.id << std::endl;
     print_double_visually("x",  0.0, 2.0, tag.x);
@@ -247,7 +255,7 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
     Point2D tag_image_center(tag.center.x, tag.center.y);
     static rgb_color blue = {0, 0, 255};
     static rgb_color green = {0, 255, 0};
-    bool main_tag = (it == tagmap.begin());
+    bool main_tag = (it->first == goal_tag_id);
     mark_point_on_image(tag_image_center, display_image,
                         main_tag ? green : blue);
     if (main_tag) {
@@ -255,16 +263,16 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
       tracker_.Process(current_goal_);
     }
   }
-  return tagmap;
+  return tag_map;
 }
 
-bool Explorer::MoveToGoal(const TagInfo& goal_tag) {
+bool Explorer::MoveToGoal(const cv::Point2d& goal) {
   static const double kXLimClose = 0.1;
   static const double kXLimFar = 0.2;
   static const double kYLimLeft = -0.05;
   static const double kYLimRight = 0.05;
-  bool at_goal = (in_range(goal_tag.x, kXLimClose, kXLimFar) &&
-                  in_range(goal_tag.y, kYLimLeft, kYLimRight));
+  bool at_goal = (in_range(goal.x, kXLimClose, kXLimFar) &&
+                  in_range(goal.y, kYLimLeft, kYLimRight));
   Walking* walker = Walking::GetInstance();
   if (at_goal) {
     walker->X_MOVE_AMPLITUDE = 0.0;
@@ -273,11 +281,11 @@ bool Explorer::MoveToGoal(const TagInfo& goal_tag) {
     std::cout << "STOPPING WALKER (Reached goal!)" << std::endl;
     return true;
   } else {
-    if (goal_tag.x < kXLimClose) {
+    if (goal.x < kXLimClose) {
       walker->X_MOVE_AMPLITUDE = -5.0;
       walker->A_MOVE_AMPLITUDE = 0.0;
     } else {
-      double goal_angle = atan2(goal_tag.y, goal_tag.x);
+      double goal_angle = atan2(goal.y, goal.x);
       double goal_angle_deg = goal_angle * 180 / M_PI;
       double goal_angle_sign = copysign(1.0, goal_angle_deg);
       printf("GOAL ANGLE: %f\n", goal_angle_deg);
