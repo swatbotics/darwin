@@ -98,10 +98,12 @@ void usage(std::ostream& ostr) {
   for (int i=0; papers[i].width_points; ++i) { ostr << papers[i].name << " "; }
   ostr << "\n";
   ostr << "   --paperdims LENGTH LENGTH  dimensions of paper\n"
+       << "   --margin LENGTH            set page margin\n"
+       << "   --margins T B L R           set page margins to given lengths\n"
        << "   --tagsize LENGTH           width of entire tag including white border\n"
        << "   --innersize LENGTH         width of black portion of tag only\n"
-       << "   --padding LENGTH           set padding between tags\n"
        << "   --tagfrac N                generate N tags per paper width (set tag size automatically)\n"
+       << "   --padding LENGTH           set padding between tags\n"
        << "   --id N                     generate only tag with id N (mutliple allowed)\n"
        << "   --maxid N                  generate only tags with id's less than N\n"
        << "   --label                    add labels\n"
@@ -119,21 +121,27 @@ int main(int argc, char** argv) {
     SizeFrac,
   };
 
+  enum MarginType {
+    MT=0, MB, ML, MR
+  };
+  
   double width = 612;
   double height = 792;
   SizeType stype = SizeFull;
   double size = width;
   double tagfrac = 1;
   double padding = 0;
+  double margins[4] = { 36, 36, 36, 36 }; // 0.5in margins all around
+
   bool draw_labels = false;
 
   if (argc < 2) {
     usage(std::cerr);
     exit(1);
   }
-
+  
   std::vector<size_t> ids;
-
+  
   if (std::string(argv[1]) == "--help") {
     usage(std::cout);
     exit(0);
@@ -157,6 +165,14 @@ int main(int argc, char** argv) {
         std::cerr << "unrecognized paper size: " << paper << "\n";
         exit(1);
       }
+    } else if (optarg == "--papersize") {
+      width = parse_unit(argv[++i]);
+      height = parse_unit(argv[++i]);
+    } else if (optarg == "--margin") {
+      double l = parse_unit(argv[++i]);
+      for (int i=0; i<4; ++i) { margins[i] = l; }
+    } else if (optarg == "--margins") {
+      for (int i=0; i<4; ++i) { margins[i] = parse_unit(argv[++i]); }
     } else if (optarg == "--label") {
       draw_labels = true;
     } else if (optarg == "--tagsize") {
@@ -190,10 +206,22 @@ int main(int argc, char** argv) {
     }
   }
 
-
-
   int tags_per_row = 0;
   double sq_size = 0;
+
+  if (width <= margins[ML] + margins[MR]) {
+    std::cerr << "width must be greater than L+R margins\n";
+    exit(1);
+  } else if (height <= margins[MT] + margins[MB]) {
+    std::cerr << "height must be greater than T+B margins\n";
+    exit(1);
+  }
+
+  double orig_width = width;
+  double orig_height = height;
+
+  width -= margins[ML] + margins[MR];
+  height -= margins[MT] + margins[MB];
 
   int rd = family.getTagRenderDimension();
   int id = rd - 2*family.whiteBorder;
@@ -206,7 +234,7 @@ int main(int argc, char** argv) {
     tags_per_row = int(tagfrac);
   }
 
-  if (!sq_size) { sq_size = size * double(id/rd); }
+  if (!sq_size) { sq_size = size * double(id)/rd; }
 
   if (!tags_per_row) { 
 
@@ -231,7 +259,7 @@ int main(int argc, char** argv) {
     exit(1);
   }
 
-  int rows_per_page = 1 + (height - row_size) / (padding + row_size);
+  int rows_per_page = 1 + int((height - row_size) / (padding + row_size));
 
   int tags_per_page = tags_per_row * rows_per_page;
 
@@ -241,7 +269,8 @@ int main(int argc, char** argv) {
   }
   ids.swap(tmp);
 
-  std::cout << "paper size: " << width << "x" << height << "\n";
+  std::cout << "paper size: " << orig_width << "x" << orig_height << "\n";
+  std::cout << "imagable area: " << width << "x" << height << "\n";
   std::cout << "tag size: " << size << "\n";
   std::cout << "padding size: " << padding << "\n";
 
@@ -284,7 +313,7 @@ int main(int argc, char** argv) {
   cairo_surface_t *surface;
   cairo_t *cr;
 
-  surface = cairo_pdf_surface_create("pdffile.pdf", width, height);
+  surface = cairo_pdf_surface_create("pdffile.pdf", orig_width, orig_height);
   cr = cairo_create(surface);
 
   cairo_set_line_width(cr, px_size / 32);
@@ -302,8 +331,8 @@ int main(int argc, char** argv) {
   int tb = wb + bb;
 
 
-  double mw = 0.5 * (width - size*tags_per_row - padding*(tags_per_row-1));
-  double mh = 0.5 * (height - row_size*rows_per_page - padding*(rows_per_page-1));
+  double mw = margins[ML] + 0.5 * (width - size*tags_per_row - padding*(tags_per_row-1));
+  double mh = margins[MT] + 0.5 * (height - row_size*rows_per_page - padding*(rows_per_page-1));
   
   for (size_t i=0; i<ids.size(); ++i) {
 
@@ -321,15 +350,19 @@ int main(int argc, char** argv) {
     cairo_rectangle(cr, x, y, sq_size, sq_size);
     cairo_fill(cr);
 
-    char buf[1024];
-    snprintf(buf, 1024, "%u", (unsigned int)ids[i]);
+    if (draw_labels) {
 
-    cairo_text_extents_t extents;
-    cairo_text_extents (cr, buf, &extents);
+      char buf[1024];
+      snprintf(buf, 1024, "%u", (unsigned int)ids[i]);
 
-    double tx = 0.5 * (sq_size - extents.width);
-    cairo_move_to(cr, x + tx, y + sq_size + px_size * wb + font_size);
-    cairo_show_text(cr, buf);
+      cairo_text_extents_t extents;
+      cairo_text_extents (cr, buf, &extents);
+
+      double tx = 0.5 * (sq_size - extents.width);
+      cairo_move_to(cr, x + tx, y + sq_size + px_size * wb + font_size);
+      cairo_show_text(cr, buf);
+
+    }
 
     /*
     cairo_rectangle(cr, x, y + sq_size + px_size * wb, sq_size, font_size);

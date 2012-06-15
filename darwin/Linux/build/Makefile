@@ -17,7 +17,7 @@ LINUX_INCLUDE_DIR = ../include
 FRAMEWORK_INCLUDE_DIR = ../../Framework/include
 INCLUDE_DIRS = -I$(LINUX_INCLUDE_DIR) -I$(FRAMEWORK_INCLUDE_DIR)
 
-CXXFLAGS += -O2 -DLINUX -Wall -shared $(INCLUDE_DIRS)
+CXXFLAGS += -g -O2 -DLINUX -Wall -shared $(INCLUDE_DIRS)
 #CXXFLAGS += -O2 -DDEBUG -DLINUX -Wall -shared $(INCLUDE_DIRS)
 LFLAGS += -lpthread -ldl
 
