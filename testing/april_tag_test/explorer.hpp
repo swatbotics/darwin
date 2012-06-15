@@ -24,7 +24,7 @@ class Explorer {
  private:
   typedef struct {
     size_t id;
-    cv::Point_<double> center;
+    cv::Point2d center;
     cv::Mat_<double> raw_r;
     cv::Mat_<double> raw_t;
     cv::Mat_<double> head_t;

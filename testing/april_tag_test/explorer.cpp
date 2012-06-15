@@ -28,15 +28,14 @@
 #define TAG_LOST_MP3_FILE "../../darwin/Data/mp3/Oops.mp3"
 #define REACHED_GOAL_MP3_FILE "../../darwin/Data/mp3/Yes.mp3"
 
+// Whether to show a timing report for tag detection.
+#define REPORT_TAG_TIMING false
+
 // Params for marking a ring around detected tags.
 #define TAG_RING_RADIUS 20  // In pixels.
 #define TAG_RING_THICKNESS 3  // In pixels.
 #define TAG_RING_DEFAULT_COLOR_RGB {0, 255, 0}
 
-// Whether to show a timing report for tag detection.
-#define REPORT_TAG_TIMING false
-
-//static const double PI = 3.1415926;
 static const rgb_color TAG_RING_DEFAULT_COLOR = TAG_RING_DEFAULT_COLOR_RGB;
 
 void mark_point_on_image(const Robot::Point2D& point, Robot::Image* rgb_image,
@@ -82,7 +81,6 @@ void Explorer::Initialize() {
   // NOTE: Must initialize streamer before framework!
   streamer_ = new mjpg_streamer(Camera::WIDTH, Camera::HEIGHT);
 
-  // Initialize April Tag detection code.
   tag_detector_.segDecimate = true;
 
   InitializeMotionFramework();
@@ -179,10 +177,6 @@ void Explorer::Process() {
     // We didn't find a tag - make a sad noise if this is a change.
     if (found_tag) LinuxActionScript::PlayMP3(TAG_LOST_MP3_FILE);
     found_tag = false;
-    /*
-    static const Point2D& no_goal_value = Point2D(-1, -1);
-    current_goal_ = no_goal_value;
-    */
     LookForGoal();
   }
 
@@ -322,7 +316,6 @@ void Explorer::LookForGoal() {
   walker->A_MOVE_AMPLITUDE = 0.0;
   walker->Stop();
   static const double kPanRate = 1.0;
-  static const double kLimitPercentage = 0.95;
   static const double kScanTiltAngle = 40.0;
   Head* head = Head::GetInstance();
   static double direction = (current_goal_.X < kOpticalCenter.x ? 1.0 : -1.0);
