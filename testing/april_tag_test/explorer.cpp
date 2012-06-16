@@ -121,8 +121,8 @@ void Explorer::InitializeMotionModules() {
   manager->AddModule(head);
   manager->AddModule(walker);
   head->m_Joint.SetEnableHeadOnly(true, true);
-  head->m_Joint.SetPGain(JointData::ID_HEAD_PAN, 8);
-  head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 8);
+  head->m_Joint.SetPGain(JointData::ID_HEAD_PAN, 4); //8);
+  head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 4); //8);
   //  MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
   walker->m_Joint.SetEnableBodyWithoutHead(true, true);
   manager->SetEnable(true);
