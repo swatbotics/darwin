@@ -210,11 +210,11 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
   static const double TILT_OFFSET = 40.0;
   double pan_angle = head->GetPanAngle();  // Left is positive.
   double tilt_angle = head->GetTiltAngle() - TILT_OFFSET;  // Up is positive.
-  //  print_double_visually("pan", -180, 180, pan_angle);
-  //  print_double_visually("tilt", -90, 90, tilt_angle);
-  // Convert to radians, and invert angles to invert the rotations.
-  double p = pan_angle * M_PI / 180 * -1;
-  double t = tilt_angle * M_PI / 180 * -1;
+  print_double_visually("p", -80, 80, pan_angle);
+  print_double_visually("t", -90, 90, tilt_angle);
+  // Convert to radians.
+  double p = pan_angle * M_PI / 180;
+  double t = tilt_angle * M_PI / 180;
   cv::Mat pan_mat = (cv::Mat_<double>(3, 3) <<
                      cos(p), -sin(p),      0,
                      sin(p),  cos(p),      0,
@@ -249,6 +249,9 @@ Explorer::TagInfoMap Explorer::ProcessDetections(
   for (TagInfoMap::iterator it = tag_map.begin(); it != tag_map.end(); ++it) {
     TagInfo& tag = it->second;
     std::cout << "Found tag id: " << tag.id << std::endl;
+    //    print_double_visually("X",  0.0, 2.0, tag.head_x);
+    //    print_double_visually("Y", -2.0, 2.0, tag.head_y);
+    //    print_double_visually("Z", -1.0, 1.0, tag.head_z);
     print_double_visually("x",  0.0, 2.0, tag.x);
     print_double_visually("y", -2.0, 2.0, tag.y);
     print_double_visually("z", -1.0, 1.0, tag.z);
