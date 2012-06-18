@@ -91,6 +91,10 @@ enum ScaleType {
   ScaleAbs
 };
 
+cv::Mat rescaleImage(const cv::Mat& img, ScaleType type);
+
+void labelImage(cv::Mat& img, const std::string& text);
+
 void labelAndWaitForKey(const std::string& window,
                         const std::string& text, 
                         const cv::Mat& img, 
