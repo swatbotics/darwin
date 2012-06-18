@@ -3,6 +3,7 @@
 #include <map>
 #include <iostream>
 #include <math.h>
+#include <stdio.h>
 #include "MathUtil.h"
 #include "Geometry.h"
 #include "GrayModel.h"
