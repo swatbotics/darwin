@@ -17,8 +17,7 @@ LFLAGS += -lpthread -ljpeg -lrt
 LFLAGS += -L../../april/build -lapriltagcpp
 LFLAGS += $(shell pkg-config --libs opencv)
 
-DARWIN_LIB = darwin.a
-DARWIN_LIB_FILE = ../../darwin/Linux/lib/darwin.a
+DARWIN_LIB = ../../darwin/Linux/lib/darwin.a
 
 INCLUDES =
 OBJECTS = explorer.o util.o
@@ -34,7 +33,7 @@ $(OBJECTS): %.o: %.cpp %.hpp $(INCLUDES)
 	$(CXX) $(CXXFLAGS) -c $<
 
 $(TARGETS): %: %.cpp $(DARWIN_LIB) $(OBJECTS) $(INCLUDES)
-	$(CXX) $(CXXFLAGS) $@.cpp $(OBJECTS) $(DARWIN_LIB_FILE) \
+	$(CXX) $(CXXFLAGS) $@.cpp $(OBJECTS) $(DARWIN_LIB) \
 	    -o $@ $(LFLAGS)
 
 clean-junk:
