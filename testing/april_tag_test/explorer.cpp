@@ -41,16 +41,19 @@ static const rgb_color TAG_RING_DEFAULT_COLOR = TAG_RING_DEFAULT_COLOR_RGB;
 void mark_point_on_image(const Robot::Point2D& point, Robot::Image* rgb_image,
                          rgb_color color=TAG_RING_DEFAULT_COLOR) {
   unsigned char* framebuf = rgb_image->m_ImageData;
-  for (int i = 0; i < rgb_image->m_NumberOfPixels; i++) {
-    int x = i % rgb_image->m_Width;
-    int y = i / rgb_image->m_Width;
-    int dist = sqrt(pow(x - point.X, 2) + pow(y - point.Y, 2));
-    if (dist >= TAG_RING_RADIUS &&
-        dist <= TAG_RING_RADIUS + TAG_RING_THICKNESS) {
-      size_t offset = i * rgb_image->m_PixelSize;
-      framebuf[offset + 0] = color.R;
-      framebuf[offset + 1] = color.G;
-      framebuf[offset + 2] = color.B;
+  const int kScanRadius = TAG_RING_RADIUS + TAG_RING_THICKNESS + 1;
+  for (int x = point.X - kScanRadius; x <= point.X + kScanRadius; ++x) {
+    for (int y = point.Y - kScanRadius; y <= point.Y + kScanRadius; ++y) {
+      if (x < 0 || x >= rgb_image->m_Width ||
+          y < 0 || y >= rgb_image->m_Height) continue;
+      int dist = sqrt(pow(x - point.X, 2) + pow(y - point.Y, 2));
+      if (dist >= TAG_RING_RADIUS &&
+          dist <= TAG_RING_RADIUS + TAG_RING_THICKNESS) {
+        size_t offset = (y * rgb_image->m_Width + x) * rgb_image->m_PixelSize;
+        framebuf[offset + 0] = color.R;
+        framebuf[offset + 1] = color.G;
+        framebuf[offset + 2] = color.B;
+      }
     }
   }
 }
