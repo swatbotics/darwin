@@ -38,6 +38,7 @@ void print_usage(const char* tool_name) {
           "  -d           Use decimation for segmentation stage.\n"
           "  -t           Show timing information for tag detection.\n"
           "  -v           Show verbose debug info from tag detection.\n"
+          "  -s SIGMA     Set the segmentation sigma value.\n"
           "  -f FAMILY    Look for the given tag family (default \"%s\")\n",
           tool_name, DEFAULT_TAG_FAMILY);
   fprintf(stderr, "Known tag families:");
@@ -107,13 +108,18 @@ void mark_point_on_image(const Robot::Point2D& point, Robot::Image* rgb_image,
 
 int main(int argc, char* argv[]) {
   const char* family_str = DEFAULT_TAG_FAMILY;
+  const float kSegSigmaPlaceholder = -1;
+  float seg_sigma = kSegSigmaPlaceholder;
   bool decimate = false;
   bool use_timing = false;
   bool show_debug_info = false;
-  const char* options = "f:dtv";
+  const char* options = "f:s:dtv";
   int c;
   while ((c = getopt(argc, argv, options)) != -1) {
     switch (c) {
+      case 's':
+        seg_sigma = atof(optarg);
+        break;
       case 'f':
         family_str = optarg;
         break;
@@ -135,6 +141,7 @@ int main(int argc, char* argv[]) {
 
   TagFamily family(family_str);
   TagDetector detector(family);
+  if (seg_sigma != kSegSigmaPlaceholder) detector.segSigma = seg_sigma;
   if (decimate) detector.segDecimate = true;
   if (show_debug_info) {
     detector.debug = true;
