@@ -16,6 +16,9 @@
 #define INI_FILE_PATH "config.ini"
 #define U2D_DEV_NAME "/dev/ttyUSB0"
 
+// Params specifying the tags to look for.
+#define DEFAULT_TAG_FAMILY "Tag36h11"
+
 // Whether to show a timing report for tag detection.
 #define REPORT_TAG_TIMING false
 
@@ -29,7 +32,13 @@ namespace {
 static const rgb_color TAG_RING_DEFAULT_COLOR = TAG_RING_DEFAULT_COLOR_RGB;
 
 void print_usage(const char* tool_name) {
-  fprintf(stderr, "Usage: %s TAGFAMILY [-d | --decimate]\n", tool_name);
+  fprintf(stderr,
+          "Usage: %s [-d] [-t] [-f FAMILY]\n"
+          "Run a tool to test Darwin's tag detection. Options:\n"
+          "  -d           Use decimation for segmentation stage.\n"
+          "  -t           Show timing information for tag detection.\n"
+          "  -f FAMILY    Look for the given tag family (default \"%s\")\n",
+          tool_name, DEFAULT_TAG_FAMILY);
   fprintf(stderr, "Known tag families:");
   TagFamily::StringArray known = TagFamily::families();
   for (size_t i = 0; i < known.size(); ++i) {
@@ -96,23 +105,32 @@ void mark_point_on_image(const Robot::Point2D& point, Robot::Image* rgb_image,
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 2 || argc > 3) {
-    print_usage(argv[0]);
-    exit(1);
-  }
-
-  TagFamily family(argv[1]);
-  TagDetector detector(family);
-  const std::string dstr = "-d";
-  const std::string dstr_long = "--decimate";
-  if (argc == 3) {
-    if (argv[2] == dstr || argv[2] == dstr_long) {
-      detector.segDecimate = true;
-    } else {
-      print_usage(argv[0]);
-      exit(1);
+  const char* family_str = DEFAULT_TAG_FAMILY;
+  bool decimate = false;
+  bool use_timing = false;
+  const char* options = "f:dt";
+  int c;
+  while ((c = getopt(argc, argv, options)) != -1) {
+    switch (c) {
+      case 'f':
+        family_str = optarg;
+        break;
+      case 'd':
+        decimate = true;
+        break;
+      case 't':
+        use_timing = true;
+        break;
+      default:
+        fprintf(stderr, "\n");
+        print_usage(argv[0]);
+        exit(1);
     }
   }
+
+  TagFamily family(family_str);
+  TagDetector detector(family);
+  if (decimate) detector.segDecimate = true;
 
   // NOTE: Must initialize camera before framework!
   InitializeCamera();
@@ -134,7 +152,7 @@ int main(int argc, char* argv[]) {
     unsigned char* raw_frame = rgb_image->m_ImageData;
     cv::Mat frame(Camera::HEIGHT, Camera::WIDTH, CV_8UC3, raw_frame);
     detector.process(frame, kOpticalCenter, detections);
-    if (REPORT_TAG_TIMING) TagDetector::reportTimers();
+    if (use_timing) TagDetector::reportTimers();
 
     static std::set<size_t> seen_tags;
     std::set<size_t> new_seen_tags;
