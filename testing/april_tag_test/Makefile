@@ -23,7 +23,7 @@ APRILTAGS_LIB = ../../april/build/libapriltagcpp.a
 INCLUDES =
 OBJECTS = explorer.o util.o
 
-TARGETS = run_explorer
+TARGETS = run_explorer tag_test_tool
 
 all: $(TARGETS)
 
