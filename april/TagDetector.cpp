@@ -705,6 +705,40 @@ void TagDetector::process(const cv::Mat& orig,
     }
   }
 
+  if (debug) {
+
+    size_t cidx = 0;
+    cv::Mat_<cv::Vec3b> m = cv::Mat_<cv::Vec3b>::zeros(fimseg.size());
+
+    const ScalarVec& ccolors = getCColors();
+
+    for (ClusterLookup::const_iterator i=clusters.begin(); 
+         i!=clusters.end(); ++i) {
+
+      const XYWArray& xyw = i->second;
+
+      const cv::Scalar& c = ccolors[cidx % ccolors.size()];
+
+      for (size_t j=0; j<xyw.size(); ++j) {
+        const XYW& pi = xyw[j];
+        const float fmax = 0.5;
+        float f = std::min(pi.w, fmax) / fmax;
+        assert( pi.x >= 0 && pi.x < m.cols );
+        assert( pi.y >= 0 && pi.y < m.rows );
+        m(pi.y, pi.x) = cv::Vec3b(c[0]*f, c[1]*f, c[2]*f);
+      }
+
+      ++cidx;
+
+    }
+
+    emitDebugImage(debugWindowName, 
+                   4, 0, debugNumberFiles,
+                   "Clusters", 
+                   m, ScaleNone);
+
+  }
+
   END_PROFILE(step4_time);
 
   ///////////////////////////////////////////////////////////
