@@ -423,6 +423,16 @@ void TagDetector::process(const cv::Mat& orig,
   at::Mat fimTheta( fimseg.size() );
   at::Mat fimMag( fimseg.size() );
 
+  for (int x=0; x<fimseg.cols; ++x) {
+    fimTheta(0, x) = fimTheta(fimseg.rows-1, x) =
+      fimMag(0, x) = fimMag(fimseg.rows-1, x) = 0;
+  }
+
+  for (int y=0; y<fimseg.rows; ++y) {
+    fimTheta(y, 0) = fimTheta(y, fimseg.cols-1) =
+      fimMag(y, 0) = fimMag(y, fimseg.cols-1) = 0;
+  }
+
   for (int y=1; y+1<fimseg.rows; ++y) {
     for (int x=1; x+1<fimseg.cols; ++x) {
 
