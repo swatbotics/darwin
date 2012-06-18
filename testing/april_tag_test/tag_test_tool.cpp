@@ -37,6 +37,7 @@ void print_usage(const char* tool_name) {
           "Run a tool to test Darwin's tag detection. Options:\n"
           "  -d           Use decimation for segmentation stage.\n"
           "  -t           Show timing information for tag detection.\n"
+          "  -v           Show verbose debug info from tag detection.\n"
           "  -f FAMILY    Look for the given tag family (default \"%s\")\n",
           tool_name, DEFAULT_TAG_FAMILY);
   fprintf(stderr, "Known tag families:");
@@ -108,7 +109,8 @@ int main(int argc, char* argv[]) {
   const char* family_str = DEFAULT_TAG_FAMILY;
   bool decimate = false;
   bool use_timing = false;
-  const char* options = "f:dt";
+  bool show_debug_info = false;
+  const char* options = "f:dtv";
   int c;
   while ((c = getopt(argc, argv, options)) != -1) {
     switch (c) {
@@ -121,6 +123,9 @@ int main(int argc, char* argv[]) {
       case 't':
         use_timing = true;
         break;
+      case 'v':  // For "verbose".
+        show_debug_info = true;
+        break;
       default:
         fprintf(stderr, "\n");
         print_usage(argv[0]);
@@ -131,6 +136,10 @@ int main(int argc, char* argv[]) {
   TagFamily family(family_str);
   TagDetector detector(family);
   if (decimate) detector.segDecimate = true;
+  if (show_debug_info) {
+    detector.debug = true;
+    detector.debugWindowName = "Tag test tool";
+  }
 
   // NOTE: Must initialize camera before framework!
   InitializeCamera();
