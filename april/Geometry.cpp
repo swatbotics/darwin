@@ -236,25 +236,22 @@ at::Point Quad::interpolate01(at::real x, at::real y) const {
 
 //////////////////////////////////////////////////////////////////////
 
-void labelAndWaitForKey(const std::string& window,
-                        const std::string& text,
-                        const cv::Mat& img,
-                        ScaleType type) {
+cv::Mat rescaleImage(const cv::Mat& img, ScaleType type) {
 
-  cv::Mat tmpu;
+  cv::Mat rval;
 
   if (type == ScaleNone) {
 
     if (img.depth() == CV_8U) {
-      tmpu = img.clone();
+      rval = img.clone();
     } else {
       double fmin, fmax;
       cv::minMaxLoc(img, &fmin, &fmax);
       if (fmax - fmin <= 1) {
-        tmpu = cv::Mat(img.rows, img.cols, CV_8U);
-        cv::convertScaleAbs(img, tmpu, 255);
+        rval = cv::Mat(img.rows, img.cols, CV_8U);
+        cv::convertScaleAbs(img, rval, 255);
       } else {
-        img.convertTo(tmpu, CV_8U);
+        img.convertTo(rval, CV_8U);
       }
     }
 
@@ -279,17 +276,34 @@ void labelAndWaitForKey(const std::string& window,
       tmp = 127 + 127*fsrc/fmag;
     }
 
-    tmp.convertTo(tmpu, CV_8U);
+    tmp.convertTo(rval, CV_8U);
 
   }
 
-  cv::putText(tmpu, text, cv::Point(4, 20),
+  return rval;
+
+}
+
+void labelImage(cv::Mat& img, const std::string& text) {
+
+  cv::putText(img, text, cv::Point(4, 20),
               cv::FONT_HERSHEY_SIMPLEX,
               0.6, CV_RGB(0,0,0), 3, CV_AA);
 
-  cv::putText(tmpu, text, cv::Point(4, 20),
+  cv::putText(img, text, cv::Point(4, 20),
               cv::FONT_HERSHEY_SIMPLEX,
               0.6, CV_RGB(255,255,255), 1, CV_AA);
+
+}
+
+void labelAndWaitForKey(const std::string& window,
+                        const std::string& text,
+                        const cv::Mat& img,
+                        ScaleType type) {
+  
+  cv::Mat tmpu = rescaleImage(img, type);
+
+  labelImage(tmpu, text);
   
   cv::imshow(window, tmpu);
   cv::waitKey();

@@ -4,7 +4,7 @@ TARGET = control_ee
 INCLUDE_DIRS = -I../../../Linux/include -I../../../Framework/include -I/.
 
 CXX = g++
-CXXFLAGS += -O2 -DLINUX -DIKFAST_NO_MAIN -Wall $(INCLUDE_DIRS)
+CXXFLAGS += -g -O2 -DLINUX -DIKFAST_NO_MAIN -Wall $(INCLUDE_DIRS)
 #CXXFLAGS += -O2 -DDEBUG -DLINUX -Wall $(INCLUDE_DIRS)
 LFLAGS += -lpthread -ljpeg -lrt
 
