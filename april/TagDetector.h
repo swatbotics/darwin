@@ -4,12 +4,33 @@
 #include "Geometry.h"
 #include "TagFamily.h"
 
-class TagDetector {
-public:
+class TagDetectorParams {
+ public:
+  static const at::real kDefaultSigma = 0;
+  static const at::real kDefaultSegSigma = 0.8;
+  static const bool     kDefaultSegDecimate = false;
+  static const at::real kDefaultMinMag = 0.004;
+  static const at::real kDefaultMaxEdgeCost = 30*M_PI/180;
+  static const at::real kDefaultThetaThresh = 100;
+  static const at::real kDefaultMagThresh = 1200;
+  static const at::real kDefaultMinimumLineLength = 4;
+  static const at::real kDefaultMinimumSegmentSize = 4;
+  static const at::real kDefaultMinimumTagSize = 6;
+  static const at::real kDefaultMaxQuadAspectRatio = 32;
 
-  typedef at::uint uint;
-
-  const TagFamily& tagFamily;
+  TagDetectorParams() :
+      sigma(kDefaultSigma),
+      segSigma(kDefaultSegSigma),
+      segDecimate(kDefaultSegDecimate),
+      minMag(kDefaultMinMag),
+      maxEdgeCost(kDefaultMaxEdgeCost),
+      thetaThresh(kDefaultThetaThresh),
+      magThresh(kDefaultMagThresh),
+      minimumLineLength(kDefaultMinimumLineLength),
+      minimumSegmentSize(kDefaultMinimumSegmentSize),
+      minimumTagSize(kDefaultMinimumTagSize),
+      maxQuadAspectRatio(kDefaultMaxQuadAspectRatio) {
+  }
 
   at::real sigma;
   at::real segSigma;
@@ -22,14 +43,22 @@ public:
   at::real minimumSegmentSize;
   at::real minimumTagSize;
   at::real maxQuadAspectRatio;
+};
 
-  bool        debug;
-  std::string debugWindowName; // if this is empty, will instead emit files
-  bool        debugNumberFiles;
 
+class TagDetector {
+public:
+
+  typedef at::uint uint;
   enum { WEIGHT_SCALE = 100 };//10000;
 
-  TagDetector(const TagFamily& f);
+  static const bool kDefaultDebug = false;
+  static const bool kDefaultDebugNumberFiles = false;
+  static const char* kDefaultDebugWindowName;
+
+  explicit TagDetector(const TagFamily& f,
+                       const TagDetectorParams& parameters =
+                       TagDetectorParams());
 
   static at::real arctan2(at::real y, at::real x);
 
@@ -49,6 +78,12 @@ public:
   static void initTimers();
   static void reportTimers();
 
+  const TagFamily& tagFamily;
+  TagDetectorParams params;
+
+  bool debug;
+  bool debugNumberFiles;
+  std::string debugWindowName; // if this is empty, will instead emit files
 };
 
 

@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
   int sarg = 2;
   if (argv[sarg] == dstr) {
     std::cout << "will decimate for segmentation!\n";
-    detector.segDecimate = true;
+    detector.params.segDecimate = true;
     ++sarg;
   }
 

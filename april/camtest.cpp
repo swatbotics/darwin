@@ -45,13 +45,12 @@ int main(int argc, char** argv) {
   std::string win = "Cam tag test";
 
   TagFamily family(argv[1]);
-  TagDetector detector(family);
-
+  TagDetectorParams params;
   if (argc == 4 && argv[3] == dstr) {
-    detector.segDecimate = true;
+    params.segDecimate = true;
     std::cout << "will decimate for segmentation!\n";
   }
-  //detector.segSigma = 1.6;
+  TagDetector detector(family, params);
   
   TagDetectionArray detections;
 

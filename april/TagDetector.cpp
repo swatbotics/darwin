@@ -195,24 +195,15 @@ bool detectionsOverlapTooMuch(const TagDetection& a, const TagDetection& b)
 
 //////////////////////////////////////////////////////////////////////
 
-TagDetector::TagDetector(const TagFamily& f): tagFamily(f) 
-{
+const char* TagDetector::kDefaultDebugWindowName = "";
 
-  sigma = 0;
-  segSigma = 0.8;
-  segDecimate = false;
-  minMag = 0.004;
-  maxEdgeCost = 30*M_PI/180;
-  thetaThresh = 100;
-  magThresh = 1200;
-  minimumLineLength = 4;
-  minimumSegmentSize = 4;
-  minimumTagSize = 6;
-  maxQuadAspectRatio = 32;
-  debug = false;
-  debugWindowName = "";
-  debugNumberFiles = false;
-
+TagDetector::TagDetector(const TagFamily& f,
+                         const TagDetectorParams& parameters) :
+    tagFamily(f),
+    params(parameters),
+    debug(kDefaultDebug),
+    debugNumberFiles(kDefaultDebugNumberFiles),
+    debugWindowName(kDefaultDebugWindowName) {
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -246,16 +237,16 @@ at::real TagDetector::arctan2(at::real y, at::real x) {
 int TagDetector::edgeCost(at::real theta0, at::real mag0, 
 			  at::real theta1, at::real mag1) const {
 
-  if (mag0 < minMag || mag1 < minMag) {
+  if (mag0 < params.minMag || mag1 < params.minMag) {
     return -1;
   }
 
   at::real thetaErr = fabs(MathUtil::mod2pi(theta1 - theta0));
-  if (thetaErr > maxEdgeCost) {
+  if (thetaErr > params.maxEdgeCost) {
     return -1;
   }
 
-  at::real normErr = thetaErr / maxEdgeCost;
+  at::real normErr = thetaErr / params.maxEdgeCost;
 
   assert( int(normErr*WEIGHT_SCALE) >= 0 );
     
@@ -344,8 +335,8 @@ void TagDetector::process(const cv::Mat& orig,
 
   at::Mat fim;
 
-  if (sigma > 0) {
-    cv::GaussianBlur(fimOrig, fim, cv::Size(0,0), sigma);
+  if (params.sigma > 0) {
+    cv::GaussianBlur(fimOrig, fim, cv::Size(0,0), params.sigma);
     if (debug) { 
       emitDebugImage(debugWindowName, 
                      1, 0, debugNumberFiles,
@@ -392,11 +383,11 @@ void TagDetector::process(const cv::Mat& orig,
 
   at::Mat fimseg;
 
-  if (segSigma > 0) {
-    if (segSigma == sigma) {
+  if (params.segSigma > 0) {
+    if (params.segSigma == params.sigma) {
       fimseg = fim;
     } else {
-      cv::GaussianBlur(fimOrig, fimseg, cv::Size(0,0), segSigma);
+      cv::GaussianBlur(fimOrig, fimseg, cv::Size(0,0), params.segSigma);
     }
     if (debug) { 
       emitDebugImage(debugWindowName, 
@@ -408,7 +399,7 @@ void TagDetector::process(const cv::Mat& orig,
     fimseg = fimOrig;
   }
 
-  if (segDecimate) {
+  if (params.segDecimate) {
     at::Mat small(fimseg.rows/2, fimseg.cols/2);
     for (int y=0; y<small.rows; ++y) {
       for (int x=0; x<small.cols; ++x) {
@@ -542,7 +533,7 @@ void TagDetector::process(const cv::Mat& orig,
 
         at::real mag0 = fimMag(y,x);
 
-        if (mag0 < minMag) {
+        if (mag0 < params.minMag) {
           continue;
         }
 
@@ -620,7 +611,7 @@ void TagDetector::process(const cv::Mat& orig,
 
     // process edges in order of increasing weight, merging
     // clusters if we can do so without exceeding the
-    // thetaThresh.
+    // params.thetaThresh.
     for (int i = 0; i < nedges; i++) {
 
       int ida = (int) ((edges[i]>>IDA_SHIFT)&INDEX_MASK);
@@ -661,9 +652,10 @@ void TagDetector::process(const cv::Mat& orig,
 
       // merge these two clusters?
       at::real costab = (tmaxab - tminab);
-      if (costab <= (std::min(costa, costb) + thetaThresh/(sza+szb)) &&
-          (mmaxab-mminab) <= std::min(mmax[ida]-mmin[ida], 
-                                      mmax[idb]-mmin[idb]) + magThresh/(sza+szb)) {
+      if (costab <= (std::min(costa, costb) + params.thetaThresh/(sza+szb)) &&
+          (mmaxab-mminab) <= (std::min(mmax[ida]-mmin[ida],
+                                       mmax[idb]-mmin[idb]) +
+                              params.magThresh/(sza+szb))) {
 
         int idab = uf.connectNodes(ida, idb);
 
@@ -694,7 +686,7 @@ void TagDetector::process(const cv::Mat& orig,
   for (int y = 0; y+1 < fimseg.rows; y++) {
     for (int x = 0; x+1 < fimseg.cols; x++) {
 
-      if (uf.getSetSize(y*fimseg.cols+x) < minimumSegmentSize) {
+      if (uf.getSetSize(y*fimseg.cols+x) < params.minimumSegmentSize) {
         continue;
       }
       
@@ -758,7 +750,7 @@ void TagDetector::process(const cv::Mat& orig,
     // filter short lines
     at::real length = gseg.length();
 
-    if (length < minimumLineLength) {
+    if (length < params.minimumLineLength) {
       continue;
     }
     
@@ -816,7 +808,7 @@ void TagDetector::process(const cv::Mat& orig,
       seg->x1 = gseg.p2.x; seg->y1 = gseg.p2.y;
     }
 
-    if (segDecimate) {
+    if (params.segDecimate) {
       seg->x0 = 2*seg->x0 + .5;
       seg->y0 = 2*seg->y0 + .5;
       seg->x1 = 2*seg->x1 + .5;
@@ -1239,8 +1231,9 @@ void TagDetector::search(const at::Point& opticalCenter,
     at::real d5 = pdist(p[1], p[3]);
       
     // check sizes
-    if (d0 < minimumTagSize || d1 < minimumTagSize || d2 < minimumTagSize ||
-        d3 < minimumTagSize || d4 < minimumTagSize || d5 < minimumTagSize) {
+    if (d0 < params.minimumTagSize || d1 < params.minimumTagSize ||
+        d2 < params.minimumTagSize || d3 < params.minimumTagSize ||
+        d4 < params.minimumTagSize || d5 < params.minimumTagSize) {
       return;
     }
     
@@ -1248,7 +1241,7 @@ void TagDetector::search(const at::Point& opticalCenter,
     at::real dmax = std::max(std::max(d0, d1), std::max(d2, d3));
     at::real dmin = std::min(std::min(d0, d1), std::min(d2, d3));
     
-    if (dmax > dmin * maxQuadAspectRatio) {
+    if (dmax > dmin * params.maxQuadAspectRatio) {
       return;
     }
     

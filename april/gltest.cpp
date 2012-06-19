@@ -54,7 +54,6 @@ int n = family.getTagRenderDimension();
 void init() {
 
   family.whiteBorder = 1;
-  detector.segDecimate = false;
 
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
