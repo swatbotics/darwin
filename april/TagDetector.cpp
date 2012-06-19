@@ -590,7 +590,7 @@ void TagDetector::process(const cv::Mat& orig,
 
 
 
-        // UP & LEFT
+        // DOWN & LEFT
         edgeCost = (x == 0) ? -1 : this->edgeCost(theta0, mag0, 
                                                   fimTheta(y+1,x-1), 
                                                   fimMag(y+1,x-1));
