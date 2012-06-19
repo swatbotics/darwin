@@ -6,9 +6,9 @@ INCLUDE_DIRS = -I../../../Linux/include -I../../../Framework/include -I/.
 CXX = g++
 CXXFLAGS += -g -O2 -DLINUX -DIKFAST_NO_MAIN -Wall $(INCLUDE_DIRS)
 #CXXFLAGS += -O2 -DDEBUG -DLINUX -Wall $(INCLUDE_DIRS)
-LFLAGS += -lpthread -ljpeg -lrt
+LFLAGS += -lpthread -ljpeg -lrt -lSDL
 
-OBJECTS = Body.o
+OBJECTS = Body.o Joystick.o
 
 SRC = main.cpp
 
@@ -22,6 +22,9 @@ darwin.a:
 
 Body.o: 
 	$(CXX) -c $(CXXFLAGS) $(LFLAGS) $(LINK_DIRS) ../../../Linux/lib/darwin.a Body.cpp
+
+Joystick.o: 
+	$(CXX) -c $(CXXFLAGS) $(LFLAGS) $(LINK_DIRS) Joystick.cpp
 
 $(TARGET): darwin.a $(OBJECTS) $(SRC)
 	$(CXX) $(CXXFLAGS) $(OBJECTS) $(SRC) ../../../Linux/lib/darwin.a -o $(TARGET) $(LFLAGS)

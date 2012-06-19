@@ -18,6 +18,7 @@
 #include "Camera.h"
 #include "mjpg_streamer.h"
 #include "LinuxDARwIn.h"
+#include "Joystick.h"
 #define IKFAST_NAMESPACE leftleg
 #include "ik_leftleg.cpp"
 #undef IKFAST_NAMESPACE
@@ -108,15 +109,6 @@ int motion_initialization(){
 
 }
 
-void display_intro(){
-  cout<< "control the the darwin from your keyboard\n";
-  cout<< "------------------------------------------------------\n";
-  cout<< " i -- up    j -- left   u -- forward\n";
-  cout<< " k -- down  l -- right  o -- backward\n";
-  cout<< " Anything else to quit" <<endl;
-  return;
-}
-
 static const float leftLowerBound[6] = {-1.57,  -.87,  -.52,  -2.24,  -1.39,  -.78};
 static const float leftUpperBound[6] = {.52,    .78,   1.57,  0,      .96,    .78};
 
@@ -163,75 +155,7 @@ IKReal IKsin(IKReal in){ return leftleg::IKsin(in);}
 
 IKReal IKcos(IKReal in){ return leftleg::IKcos(in);}
 
-/*
-void update_transforms(IKReal* eetrans_l, IKReal* eetrans_r, IKReal* eeEuler_l, IKReal* eeEuler_r){
-  char control;
-  set_stdin();
-  while (!kbhit()) {}
-  control = char(_getch());
-  reset_stdin();
-  switch (control){
-    case 'i':
-      eetrans_l[1]+=.01; break;
-    case 'k':
-      eetrans_l[1]+=-.01; break;
-    case 'j':
-      eetrans_l[0]+=.01; break;
-    case 'l':
-      eetrans_l[0]+=-.01; break;
-    case 'u':
-      eetrans_l[2]+=.01; break;
-    case 'o':
-      eetrans_l[2]+=-.01; break;
-     case 'w':
-       eeEuler_l[1]+=.1; break;
-     case 's':
-       eeEuler_l[1]+=-.1; break;
-     case 'a':
-       eeEuler_l[0]+=.1; break;
-     case 'd':
-       eeEuler_l[0]+=-.1; break;
-     case 'q':
-       eeEuler_l[2]+=.1; break;
-     case 'e':
-       eeEuler_l[2]+=-.1; break;
-     case 'I':
-       eetrans_r[1]+=.01; break;
-     case 'K':
-       eetrans_r[1]+=-.01; break;
-     case 'J':
-       eetrans_r[0]+=.01; break;
-     case 'L':
-       eetrans_r[0]+=-.01; break;
-     case 'U':
-       eetrans_r[2]+=.01; break;
-     case 'O':
-       eetrans_r[2]+=-.01; break;
-     case 'W':
-       eeEuler_r[1]+=.1; break;
-     case 'S':
-       eeEuler_r[1]+=-.1; break;
-     case 'A':
-       eeEuler_r[0]+=.1; break;
-     case 'D':
-       eeEuler_r[0]+=-.1; break;
-     case 'Q':
-       eeEuler_r[2]+=.1; break;
-     case 'E':
-       eeEuler_r[2]+=-.1; break;
-     default:
-       exit(1);
-   }
-   printf("\n");
-   printf("new transform left: %.2f, %.2f, %.2f \n",eetrans_l[0],eetrans_l[1],eetrans_l[2]);
-   printf("new euler angles left: %.2f, %.2f, %.2f \n",eeEuler_l[0],eeEuler_l[1],eeEuler_l[2]);
-   printf("new transform right: %.2f, %.2f, %.2f \n",eetrans_r[0],eetrans_r[1],eetrans_r[2]);
-   printf("new euler angles right: %.2f, %.2f, %.2f \n",eeEuler_r[0],eeEuler_r[1],eeEuler_r[2]);
-   return;
- }
-*/
-
- void dance(IKReal* trans, IKReal* Euler){
+void dance(IKReal* trans, IKReal* Euler){
    const IKReal trans_size = .001;
    const IKReal rot_size = .5 * 3.14 / 180;
    char control;
@@ -323,16 +247,75 @@ void seteetrans(const IKReal* bodytrans, const IKReal* eeoff,
   return;
 }
 
+void joystickfunz(Joystick* joy){
+  joy->update();
+  if (joy->getHat(0)){
+    printf("yo\n");
+  }
+  return;
+}
+
+void moveTo(IKReal* trans, int value, IKReal trans_size){ 
+  //   const IKReal trans_size = .000001;  
+   const IKReal step_size = 10;
+   if (*trans - trans_size * value < -step_size){
+     *trans += step_size * trans_size;
+   } else if (*trans - trans_size * value > step_size){
+     *trans -= step_size * trans_size;
+   } else {
+     *trans = trans_size * value;
+   }
+   return;
+}
+
+void dance(IKReal* trans, IKReal* Euler, Joystick* joy){
+  if (joy==NULL){
+    dance(trans, Euler);
+  } else {
+  const IKReal trans_size = .000001;  
+  const IKReal rot_size = .00001;
+   joy->update();
+   switch (joy->getHat(0)){
+     case 1:
+       trans[1]+=trans_size; break;
+     case 2:
+       trans[1]+=-trans_size; break;
+     case 4:
+       Euler[1]+=rot_size; break;
+     case 8:
+       Euler[1]+=-rot_size; break;
+   }
+   moveTo(&trans[0], -joy->getAxis(0), trans_size);
+   moveTo(&trans[2], -joy->getAxis(1), trans_size);
+   moveTo(&Euler[0], -joy->getAxis(4), rot_size);   
+   moveTo(&Euler[2], -joy->getAxis(3), -rot_size);
+   
+
+   /*
+   if (joy->getButton(4)){trans[1]+=trans_size;}
+   if (joy->getButton(5)){trans[1]+=-trans_size;}
+   if (joy->getButton(4)){trans[1]+=trans_size;}
+   if (joy->getButton(4)){trans[1]+=trans_size;} 
+
+   printf("\n");
+   printf("new transform: %.2f, %.2f, %.2f \n",trans[0],trans[1],trans[2]);
+   printf("new euler angles: %.2f, %.2f, %.2f \n",Euler[0],Euler[1],Euler[2]);
+   */
+  }
+  return;
+}
 
 
  int main(void)
  {
-   display_intro();
+   //   display_intro();
 
    if (motion_initialization()){
      printf("Failed to initialize control!\n");
      return -1;
    }
+
+   Joystick* joy = new Joystick(0);
 
    IKReal bodyEuler[3] = {0,0,0};
    IKReal bodytrans[3] = {0,0,0};
@@ -352,13 +335,13 @@ void seteetrans(const IKReal* bodytrans, const IKReal* eeoff,
      transpose(bodyrot,eerot_r);
      seteetrans(bodytrans, transOffset_l, eerot_l, eetrans_l);
      seteetrans(bodytrans, transOffset_r, eerot_r, eetrans_r);
-
+     /*
      printtrans(eetrans_l, "left trans");
      printtrans(eetrans_r, "right trans");
 
      printrot(eerot_l, "ee rot");
      printrot(bodyrot, "body rot");
-
+     */
      if (solver_l.ik((IKReal*)eetrans_l,(IKReal*) eerot_l, pfree , solutions_l)){
        // Check and return one correct solution
        solution_index = checkSol(solutions_l);
@@ -389,7 +372,9 @@ void seteetrans(const IKReal* bodytrans, const IKReal* eeoff,
      } else {
        printf("Failed to get right foot ik solution\n");
      }
-     dance(bodytrans, bodyEuler);
+     dance(bodytrans, bodyEuler, joy);
+     //    joystickfunz(joy);
   }
+  joy->close();
   return 0;
 }
