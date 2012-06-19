@@ -32,15 +32,21 @@ namespace {
 static const rgb_color TAG_RING_DEFAULT_COLOR = TAG_RING_DEFAULT_COLOR_RGB;
 
 void print_usage(const char* tool_name) {
-  fprintf(stderr,
-          "Usage: %s [-d] [-t] [-f FAMILY]\n"
-          "Run a tool to test Darwin's tag detection. Options:\n"
-          "  -d           Use decimation for segmentation stage.\n"
-          "  -t           Show timing information for tag detection.\n"
-          "  -v           Show verbose debug info from tag detection.\n"
-          "  -s SIGMA     Set the segmentation sigma value.\n"
-          "  -f FAMILY    Look for the given tag family (default \"%s\")\n",
-          tool_name, DEFAULT_TAG_FAMILY);
+  TagFamily default_family(DEFAULT_TAG_FAMILY);
+  TagDetector default_detector(default_family);
+  fprintf(stderr, "\
+Usage: %s [-d] [-t] [-f FAMILY]\n\
+Run a tool to test Darwin's tag detection. Options:\n\
+ -d              Use decimation for segmentation stage.\n\
+ -t              Show timing information for tag detection.\n\
+ -v              Show verbose debug info from tag detection.\n\
+ -o              Generate debug visuals as output files vs. using X11.\n\
+ -s SIGMA        Set the segmentation sigma value (default %.2f).\n     \
+ -a THETATHRESH  Set the theta threshold for clustering (default %.1f).\n\
+ -m MAGTHRESH    Set the magnitude threshold for clustering (default %.1f).\n\
+ -f FAMILY       Look for the given tag family (default \"%s\")\n",
+          tool_name, default_detector.segSigma, default_detector.thetaThresh,
+          default_detector.magThresh, DEFAULT_TAG_FAMILY);
   fprintf(stderr, "Known tag families:");
   TagFamily::StringArray known = TagFamily::families();
   for (size_t i = 0; i < known.size(); ++i) {
@@ -108,17 +114,26 @@ void mark_point_on_image(const Robot::Point2D& point, Robot::Image* rgb_image,
 
 int main(int argc, char* argv[]) {
   const char* family_str = DEFAULT_TAG_FAMILY;
-  const float kSegSigmaPlaceholder = -1;
-  float seg_sigma = kSegSigmaPlaceholder;
+  const float kPlaceholder = -1;
+  float seg_sigma = kPlaceholder;
+  float theta_thresh = kPlaceholder;
+  float mag_thresh = kPlaceholder;
   bool decimate = false;
   bool use_timing = false;
   bool show_debug_info = false;
-  const char* options = "f:s:dtv";
+  bool generate_output_files = false;
+  const char* options = "s:a:m:f:dtvo";
   int c;
   while ((c = getopt(argc, argv, options)) != -1) {
     switch (c) {
       case 's':
         seg_sigma = atof(optarg);
+        break;
+      case 'a':  // For "angle".
+        theta_thresh = atof(optarg);
+        break;
+      case 'm':
+        mag_thresh = atof(optarg);
         break;
       case 'f':
         family_str = optarg;
@@ -132,6 +147,9 @@ int main(int argc, char* argv[]) {
       case 'v':  // For "verbose".
         show_debug_info = true;
         break;
+      case 'o':  // For "output".
+        generate_output_files = true;
+        break;
       default:
         fprintf(stderr, "\n");
         print_usage(argv[0]);
@@ -141,11 +159,17 @@ int main(int argc, char* argv[]) {
 
   TagFamily family(family_str);
   TagDetector detector(family);
-  if (seg_sigma != kSegSigmaPlaceholder) detector.segSigma = seg_sigma;
+  if (seg_sigma != kPlaceholder) detector.segSigma = seg_sigma;
+  if (theta_thresh != kPlaceholder) detector.thetaThresh = theta_thresh;
+  if (mag_thresh != kPlaceholder) detector.magThresh = mag_thresh;
   if (decimate) detector.segDecimate = true;
   if (show_debug_info) {
     detector.debug = true;
     detector.debugWindowName = "Tag test tool";
+  }
+  if (generate_output_files) {
+    detector.debug = true;
+    detector.debugWindowName = "";
   }
 
   // NOTE: Must initialize camera before framework!
@@ -184,6 +208,10 @@ int main(int argc, char* argv[]) {
     seen_tags = new_seen_tags;
     
     streamer.send_image(rgb_image);
+    if (generate_output_files) {
+      printf("\nOutput files generated. Continue? (hit enter) ");
+      getchar();
+    }
   }
 
 }
