@@ -3,6 +3,8 @@
 set(CMAKE_C_FLAGS_RELEASE "-O3")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+include_directories(${OPENCV_INCLUDE_DIRS})
+
 add_library(apriltagcpp 
   CameraUtil.cpp
   Geometry.cpp 

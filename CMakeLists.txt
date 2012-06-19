@@ -5,8 +5,9 @@ cmake_minimum_required(VERSION 2.8)
 project(swatbotics)
 
 include(FindPkgConfig)
-pkg_check_modules(OPENCV REQUIRED opencv>=2.3)
+
 pkg_check_modules(CAIRO REQUIRED cairo)
+pkg_search_module(OPENCV REQUIRED opencv>=2.3 opencv-2.3.1)
 
 if (APPLE)
 find_library(OPENGL_LIBRARY OpenGL)
