@@ -3,6 +3,7 @@
 #include <map>
 #include <iostream>
 #include <math.h>
+#include <stdio.h>
 #include "MathUtil.h"
 #include "Geometry.h"
 #include "GrayModel.h"
@@ -209,7 +210,8 @@ TagDetector::TagDetector(const TagFamily& f): tagFamily(f)
   minimumTagSize = 6;
   maxQuadAspectRatio = 32;
   debug = false;
-  debugWindowName = "Debug";
+  debugWindowName = "";
+  debugNumberFiles = false;
 
 }
 
@@ -269,6 +271,37 @@ cv::Mat gaussianBlur(const cv::Mat& input, at::real sigma) {
   
 }
 
+void emitDebugImage(const std::string& windowName,
+                    int step, int substep, bool number,
+                    const std::string& label,
+                    const cv::Mat& img,
+                    ScaleType type) {
+
+  static int num = -1;
+
+  if (windowName.empty()) {
+
+    char buf[1024];
+    if (number) {
+      if (step == 0 && substep == 0) { ++num; }
+      snprintf(buf, 1024, "debug_%04d_%d_%d.png", num, step, substep);
+    } else {
+      snprintf(buf, 1024, "debug_%d_%d.png", step, substep);
+    }
+
+    cv::Mat tmp = rescaleImage(img, type);
+    labelImage(tmp, label);
+
+    cv::imwrite(buf, tmp);
+
+  } else {
+
+    labelAndWaitForKey(windowName, label, img, type);
+
+  }
+
+}
+
 void TagDetector::process(const cv::Mat& orig,
                           const at::Point& opticalCenter,
                           TagDetectionArray& detections) const {
@@ -278,8 +311,10 @@ void TagDetector::process(const cv::Mat& orig,
   START_PROFILE(total_time, "overall time");
 
   if (debug) { 
-    labelAndWaitForKey(debugWindowName, "Orig", 
-                       orig, ScaleNone); 
+    emitDebugImage(debugWindowName, 
+                   0, 0, debugNumberFiles,
+                   "Orig", 
+                   orig, ScaleNone); 
   }
 
   // This is a very long function, but it can't really be
@@ -312,8 +347,10 @@ void TagDetector::process(const cv::Mat& orig,
   if (sigma > 0) {
     cv::GaussianBlur(fimOrig, fim, cv::Size(0,0), sigma);
     if (debug) { 
-      labelAndWaitForKey(debugWindowName, "Blur", 
-                         fim, ScaleNone); 
+      emitDebugImage(debugWindowName, 
+                     1, 0, debugNumberFiles,
+                     "Blur", 
+                     fim, ScaleNone); 
     }
   } else {
     fim = fimOrig;
@@ -362,8 +399,10 @@ void TagDetector::process(const cv::Mat& orig,
       cv::GaussianBlur(fimOrig, fimseg, cv::Size(0,0), segSigma);
     }
     if (debug) { 
-      labelAndWaitForKey(debugWindowName, "Seg. Blur", 
-                         fimseg, ScaleNone); 
+      emitDebugImage(debugWindowName, 
+                     2, 0, debugNumberFiles,
+                     "Seg. Blur", 
+                     fimseg, ScaleNone); 
     }
   } else {
     fimseg = fimOrig;
@@ -384,6 +423,16 @@ void TagDetector::process(const cv::Mat& orig,
 
   at::Mat fimTheta( fimseg.size() );
   at::Mat fimMag( fimseg.size() );
+
+  for (int x=0; x<fimseg.cols; ++x) {
+    fimTheta(0, x) = fimTheta(fimseg.rows-1, x) =
+      fimMag(0, x) = fimMag(fimseg.rows-1, x) = 0;
+  }
+
+  for (int y=0; y<fimseg.rows; ++y) {
+    fimTheta(y, 0) = fimTheta(y, fimseg.cols-1) =
+      fimMag(y, 0) = fimMag(y, fimseg.cols-1) = 0;
+  }
 
   for (int y=1; y+1<fimseg.rows; ++y) {
     for (int x=1; x+1<fimseg.cols; ++x) {
@@ -441,11 +490,15 @@ void TagDetector::process(const cv::Mat& orig,
 
     std::cout << "\n";
     
-    labelAndWaitForKey(debugWindowName, "Theta", 
-                       fimTheta, ScaleMinMax);
-
-    labelAndWaitForKey(debugWindowName, "Magnitude", 
-                       fimMag, ScaleMinMax);
+    emitDebugImage(debugWindowName,
+                   2, 1, debugNumberFiles,
+                   "Theta", 
+                   fimTheta, ScaleMinMax);
+    
+    emitDebugImage(debugWindowName, 
+                   2, 2, debugNumberFiles,
+                   "Magnitude", 
+                   fimMag, ScaleMinMax);
 
   }
 
@@ -537,7 +590,7 @@ void TagDetector::process(const cv::Mat& orig,
 
 
 
-        // UP & LEFT
+        // DOWN & LEFT
         edgeCost = (x == 0) ? -1 : this->edgeCost(theta0, mag0, 
                                                   fimTheta(y+1,x-1), 
                                                   fimMag(y+1,x-1));
@@ -652,6 +705,40 @@ void TagDetector::process(const cv::Mat& orig,
     }
   }
 
+  if (debug) {
+
+    size_t cidx = 0;
+    cv::Mat_<cv::Vec3b> m = cv::Mat_<cv::Vec3b>::zeros(fimseg.size());
+
+    const ScalarVec& ccolors = getCColors();
+
+    for (ClusterLookup::const_iterator i=clusters.begin(); 
+         i!=clusters.end(); ++i) {
+
+      const XYWArray& xyw = i->second;
+
+      const cv::Scalar& c = ccolors[cidx % ccolors.size()];
+
+      for (size_t j=0; j<xyw.size(); ++j) {
+        const XYW& pi = xyw[j];
+        const float fmax = 0.5;
+        float f = std::min(pi.w, fmax) / fmax;
+        assert( pi.x >= 0 && pi.x < m.cols );
+        assert( pi.y >= 0 && pi.y < m.rows );
+        m(pi.y, pi.x) = cv::Vec3b(c[0]*f, c[1]*f, c[2]*f);
+      }
+
+      ++cidx;
+
+    }
+
+    emitDebugImage(debugWindowName, 
+                   4, 0, debugNumberFiles,
+                   "Clusters", 
+                   m, ScaleNone);
+
+  }
+
   END_PROFILE(step4_time);
 
   ///////////////////////////////////////////////////////////
@@ -754,8 +841,10 @@ void TagDetector::process(const cv::Mat& orig,
                 cv::Point(seg->x1, seg->y1),
                 color, 1, CV_AA );
     }
-    labelAndWaitForKey(debugWindowName, "Segmented", 
-                       rgbu, ScaleNone);
+    emitDebugImage(debugWindowName, 
+                   5, 0, debugNumberFiles,
+                   "Segmented", 
+                   rgbu, ScaleNone);
   }
 
   int width = fim.cols, height = fim.rows;
@@ -845,8 +934,10 @@ void TagDetector::process(const cv::Mat& orig,
       //cv::fillPoly( rgbu, &pp, &n, 1, color, CV_AA );
       cv::polylines(rgbu, &pp, &n, 1, true, color, 1, CV_AA);
     }
-    labelAndWaitForKey(debugWindowName, "Quads", 
-                       rgbu, ScaleNone);
+    emitDebugImage(debugWindowName, 
+                   7, 0, debugNumberFiles,
+                   "Quads", 
+                   rgbu, ScaleNone);
   }
 
   END_PROFILE(step7_time);

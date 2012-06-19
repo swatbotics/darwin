@@ -24,7 +24,8 @@ public:
   at::real maxQuadAspectRatio;
 
   bool        debug;
-  std::string debugWindowName;
+  std::string debugWindowName; // if this is empty, will instead emit files
+  bool        debugNumberFiles;
 
   enum { WEIGHT_SCALE = 100 };//10000;
 
