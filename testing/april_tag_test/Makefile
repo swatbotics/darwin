@@ -18,6 +18,7 @@ LFLAGS += -L../../april/build -lapriltagcpp
 LFLAGS += $(shell pkg-config --libs opencv)
 
 DARWIN_LIB = ../../darwin/Linux/lib/darwin.a
+APRILTAGS_LIB = ../../april/build/libapriltagcpp.a
 
 INCLUDES =
 OBJECTS = explorer.o util.o
@@ -28,6 +29,12 @@ all: $(TARGETS)
 
 $(DARWIN_LIB):
 	make -C ../../darwin/Linux/build
+
+$(APRILTAGS_LIB):
+	cd ../../april/build
+	cmake ..
+	cd -
+	make -C ../../april/build
 
 $(OBJECTS): %.o: %.cpp %.hpp $(INCLUDES)
 	$(CXX) $(CXXFLAGS) -c $<
