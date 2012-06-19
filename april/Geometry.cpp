@@ -301,11 +301,22 @@ void labelAndWaitForKey(const std::string& window,
                         const cv::Mat& img,
                         ScaleType type) {
   
-  cv::Mat tmpu = rescaleImage(img, type);
+  cv::Mat rescaled = rescaleImage(img, type);
 
-  labelImage(tmpu, text);
+  int fw = 1400 / rescaled.cols;
+  int fh = 1000 / rescaled.rows;
+
+  int f = std::min(fw,fh);
+
+  if (f > 1) {
+    cv::Mat tmp;
+    cv::resize(rescaled, tmp, cv::Size(0,0), f, f, CV_INTER_NN);
+    rescaled = tmp;
+  }
+
+  labelImage(rescaled, text);
   
-  cv::imshow(window, tmpu);
+  cv::imshow(window, rescaled);
   cv::waitKey();
 
 
