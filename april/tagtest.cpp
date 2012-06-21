@@ -37,14 +37,17 @@ Run a tool to test tag detection. Options:\n\
  -h              Show this help message.\n\
  -d              Show debug images and data during tag detection.\n\
  -t              Show timing information for tag detection.\n\
- -r              Show textual results of tag detection.\n\
- -v              Be verbose (includes -d -t -r).\n\
+ -R              Show textual results of tag detection.\n\
+ -v              Be verbose (includes -d -t -R).\n\
  -x              Do not generate any non-debug visuals.\n\
  -o              Generate debug visuals as output files vs. using X11.\n\
  -D              Use decimation for segmentation stage.\n\
  -s SEGSIGMA     Set the segmentation sigma value (default %.2f).\n\
  -a THETATHRESH  Set the theta threshold for clustering (default %.1f).\n\
  -m MAGTHRESH    Set the magnitude threshold for clustering (default %.1f).\n\
+ -C              Re-detect quad corners to improve accuracy.\n\
+ -b              Set the block size for corner detection (default %d).\n\
+ -r              Set the search radius for corner detection (default %d).\n\
  -f FAMILY       Look for the given tag family (default \"%s\")\n",
           tool_name,
           TagDetectorParams::kDefaultSegSigma,
@@ -62,7 +65,7 @@ Run a tool to test tag detection. Options:\n\
 
 TagTestOptions parse_options(int argc, char** argv) {
   TagTestOptions opts;
-  const char* options_str = "hdtrvxoDs:a:m:f:";
+  const char* options_str = "hdtRvxoDs:a:m:Cb:r:f:";
   int c;
   while ((c = getopt(argc, argv, options_str)) != -1) {
     switch (c) {
@@ -70,7 +73,7 @@ TagTestOptions parse_options(int argc, char** argv) {
       case 'h': print_usage(argv[0], stdout); exit(0); break;
       case 'd': opts.show_debug_info = true; break;
       case 't': opts.show_timing = true; break;
-      case 'r': opts.show_results = true; break;
+      case 'R': opts.show_results = true; break;
       case 'v': opts.be_verbose = true; break;
       case 'x': opts.no_images = true; break;
       case 'o': opts.generate_output_files = true; break;
@@ -78,6 +81,9 @@ TagTestOptions parse_options(int argc, char** argv) {
       case 's': opts.params.segSigma = atof(optarg); break;
       case 'a': opts.params.thetaThresh = atof(optarg); break;
       case 'm': opts.params.magThresh = atof(optarg); break;
+      case 'C': opts.params.refineCorners = true; break;
+      case 'b': opts.params.cornerBlockSize = atoi(optarg); break;
+      case 'r': opts.params.cornerSearchRadius = atoi(optarg); break;
       case 'f': opts.family_str = optarg; break;
       default:
         fprintf(stderr, "\n");
