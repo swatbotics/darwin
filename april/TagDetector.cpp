@@ -31,6 +31,7 @@ enum TimerIndex {
   step5_time,
   step6_time,
   step7_time,
+  step7b_time,
   step8_time,
   step9_time,
   cleanup_time,
@@ -74,6 +75,7 @@ void TagDetector::reportTimers() {
   REPORT_PROFILE(step5_time);
   REPORT_PROFILE(step6_time);
   REPORT_PROFILE(step7_time);
+  REPORT_PROFILE(step7b_time);
   REPORT_PROFILE(step8_time);
   REPORT_PROFILE(step9_time);
   REPORT_PROFILE(cleanup_time);
@@ -933,6 +935,115 @@ void TagDetector::process(const cv::Mat& orig,
   }
 
   END_PROFILE(step7_time);
+
+  ////////////////////////////////////////////////////////////////
+  // Step seven - extra. Try to use corner detection to improve
+  // corner points for quads.
+
+  START_PROFILE(step7b_time, "fix quad corners");
+
+  if (debug) {
+    std::cout << "\n\nFIXING CORNERS\n\n\n";
+  }
+  cv::Mat& fimcorner = fim;
+  const int kBlockSize = 3;
+  const int kRegionMaskRadius = 3;
+  const int kRegionRadius = kRegionMaskRadius + (kBlockSize + 1) / 2;
+  const int kRegionSize = 2 * kRegionRadius + 1;
+  const cv::Point2i region_center(kRegionRadius, kRegionRadius);
+  const cv::Rect region_template(-kRegionRadius, -kRegionRadius,
+                                 kRegionSize, kRegionSize);
+  const cv::Rect image_rect(0, 0, fimcorner.size().width,
+                            fimcorner.size().height);
+  cv::Mat mask = cv::Mat::zeros(region_template.size(), CV_8UC1);
+  cv::circle(mask, region_center, kRegionMaskRadius, 1.0, -1);
+  cv::Mat whole_masks = cv::Mat::zeros(fimcorner.size(), CV_8UC1);
+
+  for (size_t i = 0; i < quads.size(); ++i) {
+    Quad& q = *(quads[i]);
+    for (int j = 0; j < 4; ++j) {
+      cv::Point2i curr_corner = q.p[j];
+      if (debug) {
+        std::cout << "Processing corner: " << curr_corner << "\n";
+      }
+      cv::Rect region_rect = (region_template + curr_corner) & image_rect;
+      if (region_rect.size().area() == 0) continue;
+
+      cv::Mat corner_region = fimcorner(region_rect);
+      cv::Rect mask_rect = region_rect - curr_corner + region_center;
+      cv::Mat clipped_mask = mask(mask_rect);
+      cv::Mat corner_response;
+      if (debug) {
+        std::cout << "Region: " << corner_region.size().width << "x"
+                  << corner_region.size().height << " "
+                  << "Mask: " << clipped_mask.size().width << "x"
+                  << clipped_mask.size().height << " "
+                  << "Template: " << region_template.size().width << "x"
+                  << region_template.size().height << "\n";
+      }
+      assert(corner_region.size() == clipped_mask.size());
+      cv::cornerMinEigenVal(corner_region, corner_response, kBlockSize);
+      cv::Point2i best_corner;
+      cv::minMaxLoc(corner_response, NULL, NULL, NULL, &best_corner,
+                    clipped_mask);
+      q.p[j] = best_corner - region_center + curr_corner;
+      whole_masks(region_rect) += clipped_mask;
+    }
+    Quad* temp = new Quad(q.p, q.opticalCenter, q.observedPerimeter);
+    delete quads[i];
+    quads[i] = temp;
+  }
+
+  if (debug) {
+    std::cout << "\nFIXED CORNER QUADS\n";
+    cv::Mat rgbu = rgbOrig / 2 + 127;
+    const ScalarVec& ccolors = getCColors();
+    for (size_t i=0; i<quads.size(); ++i) {
+      const Quad& q = *(quads[i]);
+      cv::Point2i p[4];
+      std::cout << "quad " << i << ":\n";
+      for (int j=0; j<4; ++j) {
+        p[j] = q.p[j];
+        std::cout << "  " << p[j].x << ", " << p[j].y << "\n";
+      }
+      const cv::Scalar& color = ccolors[ i % ccolors.size() ];
+      const cv::Point2i* pp = p;
+      int n = 4;
+      //cv::fillPoly( rgbu, &pp, &n, 1, color, CV_AA );
+      cv::polylines(rgbu, &pp, &n, 1, true, color, 1, CV_AA);
+    }
+    emitDebugImage(debugWindowName,
+                   7, 1, debugNumberFiles,
+                   "Fix-Corners",
+                   rgbu, ScaleNone);
+
+    const double kBackgroundFade = 1.0 / 8;
+    cv::Mat rgb_background = rgbOrig * kBackgroundFade;
+    cv::Mat rgb_remainder = rgbOrig * (1 - kBackgroundFade);
+    cv::Mat mask_display;
+    rgb_remainder.copyTo(mask_display, whole_masks);
+    mask_display += rgb_background;
+    emitDebugImage(debugWindowName, 7, 2, debugNumberFiles,
+                   "Corners Masks", mask_display, ScaleNone);
+    double max;
+    cv::Mat whole_response;
+    int blocksize = 4; //kBlockSize;
+    cv::cornerMinEigenVal(fimcorner, whole_response, blocksize);
+    cv::minMaxLoc(whole_response, NULL, &max);
+    whole_response *= 255 / max;
+    emitDebugImage(debugWindowName, 7, 3, debugNumberFiles,
+                   "Corners MinEigenVal", whole_response, ScaleNone);
+    cv::cornerHarris(fimcorner, whole_response, blocksize, 3, 0.15);
+    cv::minMaxLoc(whole_response, NULL, &max);
+    whole_response *= 255 / max;
+    emitDebugImage(debugWindowName, 7, 4, debugNumberFiles,
+                   "Corners Harris", whole_response, ScaleNone);
+
+  }
+
+
+
+  END_PROFILE(step7b_time);
 
   ////////////////////////////////////////////////////////////////
   // Step eight. Decode the quads. For each quad, we first
