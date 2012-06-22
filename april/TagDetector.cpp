@@ -946,7 +946,7 @@ void TagDetector::process(const cv::Mat& orig,
     if (debug) {
       std::cout << "\n\nFIXING CORNERS\n\n\n";
     }
-    cv::Mat& fimcorner = fim;
+    cv::Mat& fimcorner = origbw;
     const int region_radius = (params.cornerSearchRadius +
                                (params.cornerBlockSize + 1) / 2);
     const int region_width = 2 * region_radius + 1;
@@ -986,6 +986,22 @@ void TagDetector::process(const cv::Mat& orig,
         cv::Point2i best_corner;
         cv::minMaxLoc(corner_response, NULL, NULL, NULL, &best_corner,
                       clipped_mask);
+        if (params.refineCornersSubPix) {
+          std::vector<cv::Point2f> corners(1, best_corner);
+          const cv::Size search_size(params.cornerSearchRadius,
+                                     params.cornerSearchRadius);
+          // Undocumented restriction of cornerSubPix... grr.
+          cv::Size min_size = search_size * 2 + cv::Size(5, 5);
+          if (image_region.size().width >= min_size.width &&
+              image_region.size().height >= min_size.height) {
+            const cv::Size kNoZeroZone(-1, -1);
+            cv::TermCriteria crit(cv::TermCriteria::MAX_ITER |
+                                  cv::TermCriteria::EPS, 10, 0.1);
+            cv::cornerSubPix(image_region, corners, search_size, kNoZeroZone,
+                             crit);
+            best_corner = corners.front();
+          }
+        }
         q.p[j] = best_corner - region_center + curr_corner;
         whole_masks(region_rect) = cv::max(whole_masks(region_rect),
                                            clipped_mask);

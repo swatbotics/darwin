@@ -18,6 +18,7 @@ class TagDetectorParams {
   static const at::real kDefaultMinimumTagSize = 6;
   static const at::real kDefaultMaxQuadAspectRatio = 32;
   static const bool     kDefaultRefineCorners = false;
+  static const bool     kDefaultRefineCornersSubPix = false;
   static const int      kDefaultCornerBlockSize = 3;
   static const int      kDefaultCornerSearchRadius = 3;
 
@@ -34,6 +35,7 @@ class TagDetectorParams {
       minimumTagSize(kDefaultMinimumTagSize),
       maxQuadAspectRatio(kDefaultMaxQuadAspectRatio),
       refineCorners(kDefaultRefineCorners),
+      refineCornersSubPix(kDefaultRefineCornersSubPix),
       cornerBlockSize(kDefaultCornerBlockSize),
       cornerSearchRadius(kDefaultCornerSearchRadius) {
   }
@@ -50,6 +52,7 @@ class TagDetectorParams {
   at::real minimumTagSize;
   at::real maxQuadAspectRatio;
   bool     refineCorners;
+  bool     refineCornersSubPix;
   int      cornerBlockSize;
   int      cornerSearchRadius;
 };

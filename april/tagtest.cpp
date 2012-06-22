@@ -45,7 +45,8 @@ Run a tool to test tag detection. Options:\n\
  -s SEGSIGMA     Set the segmentation sigma value (default %.2f).\n\
  -a THETATHRESH  Set the theta threshold for clustering (default %.1f).\n\
  -m MAGTHRESH    Set the magnitude threshold for clustering (default %.1f).\n\
- -C              Re-detect quad corners to improve accuracy.\n\
+ -c              Re-detect quad corners to improve accuracy.\n\
+ -C              Re-re-detect quad corners with subpixel accuracy.\n\
  -b              Set the block size for corner detection (default %d).\n\
  -r              Set the search radius for corner detection (default %d).\n\
  -f FAMILY       Look for the given tag family (default \"%s\")\n",
@@ -65,7 +66,7 @@ Run a tool to test tag detection. Options:\n\
 
 TagTestOptions parse_options(int argc, char** argv) {
   TagTestOptions opts;
-  const char* options_str = "hdtRvxoDs:a:m:Cb:r:f:";
+  const char* options_str = "hdtRvxoDs:a:m:cCb:r:f:";
   int c;
   while ((c = getopt(argc, argv, options_str)) != -1) {
     switch (c) {
@@ -81,7 +82,8 @@ TagTestOptions parse_options(int argc, char** argv) {
       case 's': opts.params.segSigma = atof(optarg); break;
       case 'a': opts.params.thetaThresh = atof(optarg); break;
       case 'm': opts.params.magThresh = atof(optarg); break;
-      case 'C': opts.params.refineCorners = true; break;
+      case 'c': opts.params.refineCorners = true; break;
+      case 'C': opts.params.refineCornersSubPix = true; break;
       case 'b': opts.params.cornerBlockSize = atoi(optarg); break;
       case 'r': opts.params.cornerSearchRadius = atoi(optarg); break;
       case 'f': opts.family_str = optarg; break;
@@ -93,6 +95,9 @@ TagTestOptions parse_options(int argc, char** argv) {
   }
   if (opts.be_verbose) {
     opts.show_debug_info = opts.show_timing = opts.show_results = true;
+  }
+  if (opts.params.refineCornersSubPix) {
+    opts.params.refineCorners = true;
   }
   return opts;
 }
