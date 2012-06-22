@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <libgen.h>
+#include <sys/time.h>
 
 #include "Camera.h"
 #include "mjpg_streamer.h"
@@ -66,6 +67,10 @@ int main(void)
 	Head::GetInstance()->m_Joint.SetPGain(JointData::ID_HEAD_PAN, 8);
 	Head::GetInstance()->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 8);
 
+    struct timeval tval;
+    gettimeofday(&tval, NULL);
+    double prevtime = tval.tv_sec + tval.tv_usec / 1000000.0;
+
     while(1)
     {
         Point2D pos;
@@ -84,6 +89,11 @@ int main(void)
             }
         }
         streamer->send_image(rgb_ball);
+
+	gettimeofday(&tval, NULL);
+	double curtime = tval.tv_sec + tval.tv_usec / 1000000.0;
+	printf("FPS: % 2d\n",  (int) (1 / (curtime - prevtime)));
+	prevtime = curtime;
     }
 
     return 0;
