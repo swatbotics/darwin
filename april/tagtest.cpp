@@ -54,6 +54,8 @@ Run a tool to test tag detection. Options:\n\
           TagDetectorParams::kDefaultSegSigma,
           TagDetectorParams::kDefaultThetaThresh,
           TagDetectorParams::kDefaultMagThresh,
+          TagDetectorParams::kDefaultCornerBlockSize,
+          TagDetectorParams::kDefaultCornerSearchRadius,
           DEFAULT_TAG_FAMILY);
 
   fprintf(output, "Known tag families:");
