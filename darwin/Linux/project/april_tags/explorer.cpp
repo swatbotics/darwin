@@ -84,7 +84,7 @@ void Explorer::Initialize() {
   // NOTE: Must initialize streamer before framework!
   streamer_ = new mjpg_streamer(Camera::WIDTH, Camera::HEIGHT);
 
-  tag_detector_.segDecimate = true;
+  tag_detector_.params.segDecimate = true;
 
   InitializeMotionFramework();
   printf("Initialize robot position? (hit enter) ");
@@ -177,7 +177,7 @@ void Explorer::Process() {
     if (reached_goal && !at_goal) {
       LinuxActionScript::PlayMP3(REACHED_GOAL_MP3_FILE);
       usleep(10 * 1000);
-      printf("\nReached goal tag %d! Continue? (hit enter) ", goal_tag_id);
+      printf("\nReached goal tag %zd! Continue? (hit enter) ", goal_tag_id);
       getchar();
       ++goal_tag_id;
       found_tag = false;

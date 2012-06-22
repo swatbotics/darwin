@@ -45,8 +45,11 @@ Run a tool to test Darwin's tag detection. Options:\n\
  -a THETATHRESH  Set the theta threshold for clustering (default %.1f).\n\
  -m MAGTHRESH    Set the magnitude threshold for clustering (default %.1f).\n\
  -f FAMILY       Look for the given tag family (default \"%s\")\n",
-          tool_name, default_detector.segSigma, default_detector.thetaThresh,
-          default_detector.magThresh, DEFAULT_TAG_FAMILY);
+          tool_name,
+          TagDetectorParams::kDefaultSegSigma,
+          TagDetectorParams::kDefaultThetaThresh,
+          TagDetectorParams::kDefaultMagThresh,
+          DEFAULT_TAG_FAMILY);
   fprintf(stderr, "Known tag families:");
   TagFamily::StringArray known = TagFamily::families();
   for (size_t i = 0; i < known.size(); ++i) {
@@ -158,11 +161,13 @@ int main(int argc, char* argv[]) {
   }
 
   TagFamily family(family_str);
-  TagDetector detector(family);
-  if (seg_sigma != kPlaceholder) detector.segSigma = seg_sigma;
-  if (theta_thresh != kPlaceholder) detector.thetaThresh = theta_thresh;
-  if (mag_thresh != kPlaceholder) detector.magThresh = mag_thresh;
-  if (decimate) detector.segDecimate = true;
+  TagDetectorParams params;
+  if (seg_sigma != kPlaceholder) params.segSigma = seg_sigma;
+  if (theta_thresh != kPlaceholder) params.thetaThresh = theta_thresh;
+  if (mag_thresh != kPlaceholder) params.magThresh = mag_thresh;
+  if (decimate) params.segDecimate = true;
+
+  TagDetector detector(family, params);
   if (show_debug_info) {
     detector.debug = true;
     detector.debugWindowName = "Tag test tool";
