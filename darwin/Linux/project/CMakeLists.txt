@@ -2,3 +2,5 @@
 
 add_subdirectory(demo)
 add_subdirectory(tutorial)
+
+add_subdirectory(april_tags)

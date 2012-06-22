@@ -36,6 +36,6 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O")
 set(CMAKE_C_FLAGS_RELEASE "-O2")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 
-add_subdirectory(darwin)
+# Put april before darwin so code in darwin can link against apriltags.
 add_subdirectory(april)
-
+add_subdirectory(darwin)
