@@ -1,5 +1,7 @@
 # Global .gitconfig for Swatbotics DARwIn-OP code.
 
+/build*
+
 *.[oa]
 *~
 *.swp
