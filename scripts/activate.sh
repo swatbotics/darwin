@@ -4,7 +4,12 @@
 # This file must be used with "source scripts/activate" *from bash*. It
 # can't be run directly or it won't be able to set environment variables.
 
-SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+SCRIPT_SOURCED_NAME="$0"
+# Hack for Bash compatibility since its $0 is useless when using 'source'.
+if [ -n "$BASH" ] && [ -z "$ZSH_VERSION" ]; then
+    SCRIPT_SOURCED_NAME="${BASH_SOURCE[0]}"
+fi
+SCRIPT_DIR=$(cd "$( dirname "$SCRIPT_SOURCED_NAME" )" && pwd)
 DARWIN_ROOT=$(dirname "$SCRIPT_DIR")
 export DARWIN_ROOT
 
@@ -46,10 +51,9 @@ deactivate nondestructive
 
 # Add useful directories to the path.
 _OLD_VIRTUAL_PATH="$PATH"
-SCRIPT_DIR_PATH="$SCRIPT_DIR"
-BUILD_BIN_PATH="$DARWIN_ROOT/build/bin"
-BUILD_DEBUG_BIN_PATH=$"$DARWIN_ROOT/build-debug/bin"
-PATH="$SCRIPT_DIR_PATH:$BUILD_DEBUG_BIN_PATH:$BUILD_BIN_PATH:$PATH"
+PATH="$DARWIN_ROOT/build/bin:$PATH"
+PATH="$DARWIN_ROOT/build-debug/bin:$PATH"
+PATH="$SCRIPT_DIR:$PATH"
 export PATH
 
 # Change the prompt to show we're in a virtualenv.
@@ -65,3 +69,7 @@ fi
 if [ -n "$BASH" -o -n "$ZSH_VERSION" ] ; then
     hash -r
 fi
+
+# Unset no-longer-needed environment variables so zsh doesn't try to use them.
+unset SCRIPT_SOURCED_NAME
+unset SCRIPT_DIR
