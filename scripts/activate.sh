@@ -46,12 +46,10 @@ deactivate nondestructive
 
 # Add useful directories to the path.
 _OLD_VIRTUAL_PATH="$PATH"
-NEWPATH="$SCRIPT_DIR"
-BUILDBINPATH="$DARWIN_ROOT/build/bin"
-if [ -d "$BUILDBINPATH" ]; then
-   NEWPATH="$NEWPATH:$BUILDBINPATH"
-fi
-PATH="$NEWPATH:$PATH"
+SCRIPT_DIR_PATH="$SCRIPT_DIR"
+BUILD_BIN_PATH="$DARWIN_ROOT/build/bin"
+BUILD_DEBUG_BIN_PATH=$"$DARWIN_ROOT/build-debug/bin"
+PATH="$SCRIPT_DIR_PATH:$BUILD_DEBUG_BIN_PATH:$BUILD_BIN_PATH:$PATH"
 export PATH
 
 # Change the prompt to show we're in a virtualenv.
