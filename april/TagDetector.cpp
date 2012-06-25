@@ -958,10 +958,12 @@ void TagDetector::process(const cv::Mat& orig,
     cv::Mat mask = cv::Mat::zeros(region_size, CV_8UC1);
     cv::circle(mask, region_center, params.cornerSearchRadius, 1.0, -1);
 
+    QuadArray new_quads;
     for (size_t i = 0; i < quads.size(); ++i) {
       Quad& q = *(quads[i]);
+      at::Point p[4];
       for (int j = 0; j < 4; ++j) {
-        cv::Point2i curr_corner = q.p[j];
+        cv::Point2i curr_corner = p[j] = q.p[j];
         if (debug) {
           std::cout << "Processing corner: " << curr_corner << "\n";
         }
@@ -1002,21 +1004,19 @@ void TagDetector::process(const cv::Mat& orig,
             best_corner = corners.front();
           }
         }
-        q.p[j] = best_corner - region_center + curr_corner;
+        p[j] = best_corner - region_center + curr_corner;
         whole_masks(region_rect) = cv::max(whole_masks(region_rect),
                                            clipped_mask);
       }
-      Quad* temp = new Quad(q.p, q.opticalCenter, q.observedPerimeter);
-      delete quads[i];
-      quads[i] = temp;
+      new_quads.push_back(new Quad(p, q.opticalCenter, q.observedPerimeter));
     }
 
     if (debug) {
       std::cout << "\nFIXED CORNER QUADS\n";
       cv::Mat rgbu = rgbOrig / 2 + 127;
       const ScalarVec& ccolors = getCColors();
-      for (size_t i=0; i<quads.size(); ++i) {
-        const Quad& q = *(quads[i]);
+      for (size_t i=0; i<new_quads.size(); ++i) {
+        const Quad& q = *(new_quads[i]);
         cv::Point2i p[4];
         std::cout << "quad " << i << ":\n";
         for (int j=0; j<4; ++j) {
@@ -1058,6 +1058,10 @@ void TagDetector::process(const cv::Mat& orig,
       emitDebugImage(debugWindowName, 7, 4, debugNumberFiles,
                      "Corners Harris", whole_response, ScaleNone);
     }
+
+    // Add the newly "fixed" quads as alternate candidates to the
+    // original candidate quads (over-detection is unlikely).
+    quads.insert(quads.end(), new_quads.begin(), new_quads.end());
   }
 
 
