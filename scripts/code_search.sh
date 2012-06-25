@@ -14,7 +14,7 @@ TUTORIALS="$DARWIN_DIR"/Linux/project/tutorial
 
 # Require an argument (otherwise grep misbehaves).
 if (($# < 1)); then
-    echo "Usage: $0 <SEARCH_TERM> [extra arguments to grep]"
+    echo "Usage: "$(basename $0)" <SEARCH_TERM> [extra arguments to grep]"
     exit 1
 fi
 
