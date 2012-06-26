@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
   TagFamily family(opts.family_str);
   TagDetector detector(family, opts.params);
   detector.debug = opts.show_debug_info;
-  detector.debugWindowName = win;
+  detector.debugWindowName = opts.generate_output_files ? "" : win;
   if (opts.params.segDecimate && opts.be_verbose) {
     std::cout << "Will decimate for segmentation!\n";
   }
