@@ -1029,9 +1029,11 @@ void TagDetector::process(const cv::Mat& orig,
         //cv::fillPoly( rgbu, &pp, &n, 1, color, CV_AA );
         cv::polylines(rgbu, &pp, &n, 1, true, color, 1, CV_AA);
       }
+      std::string extra = "";
+      if (params.refineCornersSubPix) extra += "-SubPix";
       emitDebugImage(debugWindowName,
                      7, 1, debugNumberFiles,
-                     "Fix-Corners",
+                     std::string("Fix-Corners") + extra,
                      rgbu, ScaleNone);
 
       const double kBackgroundFade = 1.0 / 8;
