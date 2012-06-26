@@ -60,7 +60,7 @@ def main():
         offset += width
 
     plt.legend(legend_handles, legend_labels)
-    plt.ylim(0, max_count + 25)
+    plt.ylim(0, max_count + 20)
     plt.xticks(inds + (width * num_series / 2),
                ['#%d' % (n + 1) for n in range(len(TEST_IMAGES))])
     plt.xlabel("Test images")
