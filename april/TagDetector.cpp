@@ -44,9 +44,14 @@ static const char* descriptions[num_timers];
 static int num_iterations = -1;
 static int num_detections;
 
-#define START_PROFILE(which, what) start_times[which] = getTimeAsDouble(); descriptions[which] = what;
-#define END_PROFILE(which) run_times[which] += (getTimeAsDouble() - start_times[which]);  num_iterations += (which == total_time) ? 1 : 0;
-#define REPORT_PROFILE(which) std::cout << #which << " was " << (run_times[which] / num_iterations) << "s. " << (descriptions[which] ? descriptions[which] : "") << "\n";
+#define START_PROFILE(which, what) \
+  start_times[which] = getTimeAsDouble(); descriptions[which] = what;
+#define END_PROFILE(which) \
+  run_times[which] += (getTimeAsDouble() - start_times[which]); \
+  num_iterations += (which == total_time) ? 1 : 0;
+#define REPORT_PROFILE(which) \
+  printf("% 6.1fms - %s - %s\n", (run_times[which] / num_iterations * 1000), \
+         #which, (descriptions[which] ? descriptions[which] : ""));
 
 static double getTimeAsDouble() {
   struct timeval tp;
