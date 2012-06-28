@@ -30,6 +30,14 @@ int main(int argc, char** argv) {
     vc.open(argv[2]);
   }
 
+  // Use uvcdynctrl to figure this out dynamically at some point?
+  vc.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
+  vc.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
+
+  std::cout << "Set camera to resolution: "
+            << vc.get(CV_CAP_PROP_FRAME_WIDTH) << "x"
+            << vc.get(CV_CAP_PROP_FRAME_HEIGHT) << "\n";
+
   cv::Mat frame;
   cv::Point2d opticalCenter;
 
