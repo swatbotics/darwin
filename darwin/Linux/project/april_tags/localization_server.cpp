@@ -1,6 +1,7 @@
 #include "localization_server.hpp"
 
 #include <iostream>
+#include <sstream>
 
 #include <boost/bind.hpp>
 
@@ -17,11 +18,12 @@ LocalizationServer::LocalizationServer() :
     vc_(),
     tag_family_(DEFAULT_TAG_FAMILY),
     detector_(tag_family_),
+    data_mutex_(),
+    localization_data_(),
     io_service_(),
     socket_(io_service_),
     remote_endpoint_(),
-    recv_buffer_(),
-    dummy_response_("foo")
+    recv_buffer_()
 {
   detector_.params.segDecimate = true;
   detector_.params.thetaThresh = 25;
@@ -62,6 +64,12 @@ void LocalizationServer::RunLocalization() {
                 << "rotation = " << d.rotation << "\n";
       */
     }
+    std::stringstream sstream;
+    sstream << detections.size();
+    {
+      boost::lock_guard<boost::mutex> lock(data_mutex_);
+      localization_data_ = sstream.str();
+    }
   }
 }
 
@@ -77,9 +85,15 @@ void LocalizationServer::ReceiveRequest() {
 void LocalizationServer::HandleRequest(const asio::error_code& error,
                                        std::size_t /*bytes_transferred*/) {
   std::cout << "Handling request!\n";
+  boost::shared_ptr<std::string> response_data(
+      new std::string(""));
+  {
+    boost::lock_guard<boost::mutex> lock(data_mutex_);
+    *response_data = localization_data_;
+  }
   if (!error || error == asio::error::message_size) {
     socket_.async_send_to(
-        asio::buffer(dummy_response_), remote_endpoint_,
+        asio::buffer(*response_data), remote_endpoint_,
         boost::bind(&LocalizationServer::HandleResponse, this,
                     asio::placeholders::error,
                     asio::placeholders::bytes_transferred));

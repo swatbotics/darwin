@@ -36,11 +36,12 @@ class LocalizationServer {
   cv::VideoCapture vc_;
   TagFamily tag_family_;
   TagDetector detector_;
+  boost::mutex data_mutex_;
+  std::string localization_data_;
   asio::io_service io_service_;
   asio::ip::udp::socket socket_;
   asio::ip::udp::endpoint remote_endpoint_;
   boost::array<int, 1> recv_buffer_;
-  std::string dummy_response_;
 };
 
 #endif  // LOCALIZATION_SERVER_HPP
