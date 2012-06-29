@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
       sprintf(buf, "%d images captured", (int)calib_images.size());
       labelImage(detected, buf);
 
-      cv::imshow("capture", detected);
+      cv::imshow("calib", detected);
 
       int k = cv::waitKey(5);
       if (k%256 == 27) { // esc
@@ -218,7 +218,7 @@ int main(int argc, char** argv) {
       labelImage(display, buf);
     }
 
-    cv::imshow("capture", display);
+    cv::imshow("calib", display);
     cv::waitKey();
     
   }
