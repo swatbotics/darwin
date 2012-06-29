@@ -6,6 +6,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <sys/stat.h>
 #include "Geometry.h"
+#include <stdio.h>
 
 typedef std::vector<cv::Point2f> CvPoint2fArray;
 typedef std::vector<cv::Point3f> CvPoint3fArray;
