@@ -10,6 +10,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(APRILTAG_INCLUDE_DIRS ${PROJECT_SOURCE_DIR} CACHE INTERNAL "" FORCE)
 
 include_directories(${OPENCV_INCLUDE_DIRS})
+link_directories(${OPENCV_LIBRARY_DIRS})
 
 add_library(apriltagcpp 
   CameraUtil.cpp
