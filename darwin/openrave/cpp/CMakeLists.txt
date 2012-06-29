@@ -7,4 +7,4 @@ endif (${SDL_FOUND})
 
 #add_subdirectory(ik_loader)
 add_subdirectory(ik_wrapper)
-#add_subdirectory(forwardKin)
+add_subdirectory(forwardKin)
