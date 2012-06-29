@@ -4,15 +4,18 @@
 #include <sstream>
 
 #include <boost/bind.hpp>
+#include <gflags/gflags.h>
 
 #include "util.hpp"
 
-#define DEFAULT_DEVICE_NUMBER 0
-#define DEFAULT_TAG_FAMILY "Tag36h11"
-#define DESIRED_FRAME_WIDTH 640
-#define DESIRED_FRAME_HEIGHT 480
-
-#define DEFAULT_SERVER_PORT 9000
+DEFINE_int32(device_num, 0,
+             "Device number for video device to parse for tag information.");
+DEFINE_string(tag_family, "Tag36h11",
+              "Tag family to use for detections.");
+DEFINE_int32(frame_width, 640, "Desired video frame width.");
+DEFINE_int32(frame_height, 480, "Desired video frame height.");
+DEFINE_int32(server_port, 9000,
+             "Port on which to run UDP localization service.");
 
 #define DEBUG false
 
@@ -20,7 +23,7 @@ namespace asio = boost::asio;
 
 LocalizationServer::LocalizationServer() :
     vc_(),
-    tag_family_(DEFAULT_TAG_FAMILY),
+    tag_family_(FLAGS_tag_family),
     detector_(tag_family_),
     data_mutex_(),
     localization_data_(),
@@ -36,14 +39,13 @@ LocalizationServer::LocalizationServer() :
 }
 
 void LocalizationServer::InitializeVideoDevice() {
-  int device = DEFAULT_DEVICE_NUMBER;
-  vc_.open(device);
+  vc_.open(FLAGS_device_num);
   if (!vc_.isOpened()) {
     std::cerr << "Could not open video device!\n";
     exit(1);
   }
-  vc_.set(CV_CAP_PROP_FRAME_WIDTH, DESIRED_FRAME_WIDTH);
-  vc_.set(CV_CAP_PROP_FRAME_HEIGHT, DESIRED_FRAME_HEIGHT);
+  vc_.set(CV_CAP_PROP_FRAME_WIDTH, FLAGS_frame_width);
+  vc_.set(CV_CAP_PROP_FRAME_HEIGHT, FLAGS_frame_height);
   std::cout << "Camera resolution: "
             << vc_.get(CV_CAP_PROP_FRAME_WIDTH) << "x"
             << vc_.get(CV_CAP_PROP_FRAME_HEIGHT) << "\n";
@@ -117,8 +119,8 @@ void LocalizationServer::Run() {
   if (DEBUG) std::cout << "Opening UDP socket.\n";
   socket_.open(udp::v4());
   if (DEBUG) std::cout << "Binding UDP socket to port "
-                       << DEFAULT_SERVER_PORT << ".\n";
-  socket_.bind(udp::endpoint(udp::v4(), DEFAULT_SERVER_PORT));
+                       << FLAGS_server_port << ".\n";
+  socket_.bind(udp::endpoint(udp::v4(), FLAGS_server_port));
   if (DEBUG) std::cout << "Receiving initial request asynchronously...\n";
   ReceiveRequest();
   if (DEBUG) std::cout << "Launching IO processing thread...\n";
@@ -129,6 +131,10 @@ void LocalizationServer::Run() {
 }
 
 int main(int argc, char* argv[]) {
+  std::string usage;
+  usage += std::string("Usage: ") + argv[0] + std::string(" [OPTIONS]");
+  gflags::SetUsageMessage(usage);
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
   LocalizationServer server;
   server.Run();
   return 0;
