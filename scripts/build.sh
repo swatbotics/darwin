@@ -32,6 +32,11 @@ run_build () {
 	cmake .. && make "$@"
     fi
     )
+
+    # Reload dynamic bash completions to reflect binaries.
+    if type -t "reload_completions"; then
+	reload_completions
+    fi
 }
 
 case "$SCRIPT_NAME" in
