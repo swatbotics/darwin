@@ -57,8 +57,8 @@ void LocalizationServer::RunLocalization() {
     const cv::Point2d optical_center(frame.cols * 0.5, frame.rows * 0.5);
     detector_.process(frame, optical_center, detections);
     for (size_t i = 0; i < detections.size(); ++i) {
-      const TagDetection& d = detections[i];
       /*
+      const TagDetection& d = detections[i];
       std::cout << " - Detection: id = " << d.id << ", "
                 << "code = " << d.code << ", "
                 << "rotation = " << d.rotation << "\n";
@@ -107,10 +107,9 @@ void LocalizationServer::HandleResponse(const asio::error_code& /*error*/,
 
 void LocalizationServer::Run() {
   std::cout << "Opening UDP socket.\n";
-  socket_.open(asio::ip::udp::v4());
+  socket_.open(udp::v4());
   std::cout << "Binding UDP socket to port " << DEFAULT_SERVER_PORT << ".\n";
-  socket_.bind(asio::ip::udp::endpoint(asio::ip::udp::v4(),
-                                       DEFAULT_SERVER_PORT));
+  socket_.bind(udp::endpoint(udp::v4(), DEFAULT_SERVER_PORT));
   std::cout << "Receiving initial request asynchronously...\n";
   ReceiveRequest();
   std::cout << "Launching IO processing thread...\n";

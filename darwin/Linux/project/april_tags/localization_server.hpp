@@ -17,6 +17,7 @@ typedef boost::thread thread;
 }  // namespace boost
 
 namespace asio = boost::asio;
+using asio::ip::udp;
 
 class LocalizationServer {
  public:
@@ -39,8 +40,8 @@ class LocalizationServer {
   boost::mutex data_mutex_;
   std::string localization_data_;
   asio::io_service io_service_;
-  asio::ip::udp::socket socket_;
-  asio::ip::udp::endpoint remote_endpoint_;
+  udp::socket socket_;
+  udp::endpoint remote_endpoint_;
   boost::array<int, 1> recv_buffer_;
 };
 
