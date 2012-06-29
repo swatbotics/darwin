@@ -5,9 +5,13 @@
 #include <unistd.h>
 
 #include <boost/bind.hpp>
+#include <gflags/gflags.h>
 
-#define LOCALIZATION_SERVER_NAME "192.168.1.7"
-#define LOCALIZATION_SERVER_PORT 9000
+DEFINE_string(server_name, "192.168.1.7",
+              "IP address or DNS name of the localization server to query.");
+DEFINE_int32(server_port, 9000,
+             "Port on the localization server to connect to.");
+
 #define RECV_BUFFER_SIZE 1024
 
 #define DEBUG false
@@ -64,8 +68,8 @@ void LocalizationClient::Run() {
   if (DEBUG) std::cout << "Resolving localization server name.\n";
   udp::resolver resolver(io_service_);
   std::stringstream port_string;
-  port_string << LOCALIZATION_SERVER_PORT;
-  udp::resolver::query query(udp::v4(), LOCALIZATION_SERVER_NAME,
+  port_string << FLAGS_server_port;
+  udp::resolver::query query(udp::v4(), FLAGS_server_name,
                              port_string.str());
   remote_endpoint_ = *resolver.resolve(query);
 
@@ -90,6 +94,10 @@ std::string LocalizationClient::GetData() {
 }
 
 int main(int argc, char* argv[]) {
+  std::string usage;
+  usage += std::string("Usage: ") + argv[0] + std::string(" [OPTIONS]");
+  gflags::SetUsageMessage(usage);
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
   LocalizationClient client;
   client.Run();
   while (true) {
