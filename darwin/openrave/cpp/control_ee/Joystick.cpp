@@ -1,7 +1,7 @@
 #include "Joystick.h"
 #include <stdexcept>
 
-#include <SDL/SDL.h>
+#include <SDL.h>
 
 int Joystick::_sdlinit = 0;
 int Joystick::_numJoysticks = 0;

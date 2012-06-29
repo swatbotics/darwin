@@ -15,4 +15,17 @@ add_executable(tag_test_tool tag_test_tool.cpp
 target_link_libraries(tag_test_tool ${DARWIN_LIBS} apriltagcpp
   ${OPENCV_LIBRARIES})
 
+find_package(Boost COMPONENTS system thread)
+if (Boost_FOUND)
+  include_directories(${Boost_INCLUDE_DIR})
 
+  add_executable(localization_server localization_server.cpp)
+  target_link_libraries(localization_server ${Boost_LIBRARIES}
+    apriltagcpp ${OPENCV_LIBRARIES})
+
+  add_executable(localization_client localization_client.cpp)
+  target_link_libraries(localization_client ${Boost_LIBRARIES}
+    apriltagcpp ${OPENCV_LIBRARIES})
+else (Boost_FOUND)
+  message("Cannot build localization binaries - need boost!")
+endif (Boost_FOUND)
