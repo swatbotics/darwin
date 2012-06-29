@@ -5,12 +5,16 @@
 
 #include <boost/bind.hpp>
 
+#include "util.hpp"
+
 #define DEFAULT_DEVICE_NUMBER 0
 #define DEFAULT_TAG_FAMILY "Tag36h11"
-#define DESIRED_FRAME_WIDTH 1280
-#define DESIRED_FRAME_HEIGHT 720
+#define DESIRED_FRAME_WIDTH 640
+#define DESIRED_FRAME_HEIGHT 480
 
 #define DEFAULT_SERVER_PORT 9000
+
+#define DEBUG false
 
 namespace asio = boost::asio;
 
@@ -48,6 +52,7 @@ void LocalizationServer::InitializeVideoDevice() {
 void LocalizationServer::RunLocalization() {
   TagDetectionArray detections;
   cv::Mat frame;
+  double lasttime = get_time_as_double();
   while (true) {
     vc_ >> frame;
     if (frame.empty()) {
@@ -70,11 +75,14 @@ void LocalizationServer::RunLocalization() {
       boost::lock_guard<boost::mutex> lock(data_mutex_);
       localization_data_ = sstream.str();
     }
+    double thistime = get_time_as_double();
+    printf("FPS: %d\n", (int) (1 / (thistime - lasttime)));
+    lasttime = thistime;
   }
 }
 
 void LocalizationServer::ReceiveRequest() {
-  std::cout << "Receiving request!\n";
+  if (DEBUG) std::cout << "Receiving request!\n";
   socket_.async_receive_from(
       asio::buffer(recv_buffer_), remote_endpoint_,
       boost::bind(&LocalizationServer::HandleRequest, this,
@@ -84,7 +92,7 @@ void LocalizationServer::ReceiveRequest() {
 
 void LocalizationServer::HandleRequest(const asio::error_code& error,
                                        std::size_t /*bytes_transferred*/) {
-  std::cout << "Handling request!\n";
+  if (DEBUG) std::cout << "Handling request!\n";
   boost::shared_ptr<std::string> response_data(
       new std::string(""));
   {
@@ -106,15 +114,16 @@ void LocalizationServer::HandleResponse(const asio::error_code& /*error*/,
 }
 
 void LocalizationServer::Run() {
-  std::cout << "Opening UDP socket.\n";
+  if (DEBUG) std::cout << "Opening UDP socket.\n";
   socket_.open(udp::v4());
-  std::cout << "Binding UDP socket to port " << DEFAULT_SERVER_PORT << ".\n";
+  if (DEBUG) std::cout << "Binding UDP socket to port "
+                       << DEFAULT_SERVER_PORT << ".\n";
   socket_.bind(udp::endpoint(udp::v4(), DEFAULT_SERVER_PORT));
-  std::cout << "Receiving initial request asynchronously...\n";
+  if (DEBUG) std::cout << "Receiving initial request asynchronously...\n";
   ReceiveRequest();
-  std::cout << "Launching IO processing thread...\n";
+  if (DEBUG) std::cout << "Launching IO processing thread...\n";
   asio::thread t(boost::bind(&asio::io_service::run, &io_service_));
-  std::cout << "Running localization in main thread...\n";
+  if (DEBUG) std::cout << "Running localization in main thread...\n";
   RunLocalization();
   t.join();
 }
