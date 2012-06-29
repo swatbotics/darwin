@@ -29,6 +29,9 @@ target_link_libraries(camtest apriltagcpp ${OPENCV_LIBRARIES})
 add_executable(tagtest tagtest.cpp)
 target_link_libraries(tagtest apriltagcpp ${OPENCV_LIBRARIES})
 
+add_executable(calibrate calibrate.cpp)
+target_link_libraries(calibrate apriltagcpp ${OPENCV_LIBRARIES})
+
 add_executable(maketags maketags.cpp)
 target_link_libraries(maketags apriltagcpp ${CAIRO_LIBRARIES} ${OPENCV_LIBRARIES})
 
