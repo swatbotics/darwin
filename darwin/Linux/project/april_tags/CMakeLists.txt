@@ -19,7 +19,7 @@ find_package(Boost COMPONENTS system thread)
 if (Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIR})
 
-  add_executable(localization_server localization_server.cpp)
+  add_executable(localization_server localization_server.cpp util.cpp)
   target_link_libraries(localization_server ${Boost_LIBRARIES}
     apriltagcpp ${OPENCV_LIBRARIES})
 

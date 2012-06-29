@@ -10,6 +10,8 @@ typedef struct {
 void print_double_visually(const char* label, double min, double max,
                            double value);
 
+double get_time_as_double();
+
 double record_elapsed_time();
 
 void change_current_dir();

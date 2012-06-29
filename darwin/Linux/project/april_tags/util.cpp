@@ -21,12 +21,16 @@ void print_double_visually(const char* label, double min, double max,
   printf(" (%.4f)\n", value);
 }
 
-double record_elapsed_time() {
-  static double last_time = -1.0;
-  struct timeval tval;
+double get_time_as_double() {
+  static struct timeval tval;
   gettimeofday(&tval, NULL);
-  double this_time = tval.tv_sec + tval.tv_usec / 1000000.0;
-  double elapsed_time = (last_time < 0) ? 0 : this_time - last_time;
+  return tval.tv_sec + tval.tv_usec / 1000000.0;
+}
+
+double record_elapsed_time() {
+  double this_time = get_time_as_double();
+  static double last_time = this_time;
+  double elapsed_time = this_time - last_time;
   last_time = this_time;
   return elapsed_time;
 }
