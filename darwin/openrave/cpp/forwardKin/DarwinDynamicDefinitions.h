@@ -12,8 +12,8 @@ struct link{
   std::string NAME;
   float MASS;            // Mass of link
   float COM[3];          // Center of mass in the link frame
-  struct link* PREVIOUS; // Pointer to previous link
-  struct link* NEXT;     // Pointer to next link
+  int PREVIOUS;          // Index of previous link
+  int NEXT;              // Index of next link (-1 for end links)
   float T_PREV2NEXT[3][4]; // Transform from link frame to next joint
                          // as top 3 rows of transform matrix
   float AXIS[3];         // Axis of rotation for this link
@@ -21,7 +21,7 @@ struct link{
 
 
 struct chain{
-  struct link* FIRST;
+  int FIRST;
   float T_FROM_BODY[3][4];
 };
 

@@ -230,26 +230,36 @@ static const int jointInd_robot2rave[20] = {17,14,18,15,19,16,//arms
 
 bool COMinbounds(std::vector<IKReal> sol_l, std::vector<IKReal> sol_r,
 		 IKReal* bodytrans, IKReal* bodyrot, ForwardKinematics myKin){
+  float maxX = .05;
+  float minX = -maxX;
+  float maxZ = .03;
+  float minZ = -maxZ;
+  
+
   for (int i=0; i<(int)sol_l.size(); i++){
     // 2i+8 is the index for the joints on the left foot. 2i+7 for the right
     // TODO: clean this up to make it readable, NO MAGIC NUMBERS
     myKin.setAngle(i+2, sol_l[i]); 
     myKin.setAngle(i+8, sol_r[i]);
-    //    printf("joint %d, angle %f \n", i+2,sol_l[i]);
-    //    printf("joint %d, angle %f \n", i+8,sol_r[i]);
   }  
-    myKin.update();
-  for (int i=0; i<20; i++){
-    printf("%f \n ", myKin.getAngle(i));
-  }
+  myKin.update();
   float bodyCOM[3] = {0,0,0};
   IKReal globalCOM[3] = {0,0,0};
   myKin.getCOM(bodyCOM);
-  applyTransform(bodytrans, bodyrot, bodyCOM, globalCOM);
+  IKReal bodytrans_from_foot[3]={bodytrans[0], bodytrans[1]+.3416, bodytrans[2]};
+  // bodytrans is the translation of the body relative to the body 
+  // at 0 position, so we must adjust to have it centered at the foot
+  applyTransform(bodytrans_from_foot, bodyrot, bodyCOM, globalCOM);
+  printf("\r");
   printf("local:  %f, %f, %f, ",bodyCOM[0], bodyCOM[1], bodyCOM[2]);
-  printf("global: %f, %f, %f, \n",globalCOM[0], globalCOM[1], globalCOM[2]);
+  printf("global: %f, %f, %f       ",globalCOM[0], globalCOM[1], globalCOM[2]);
  
-  return true;
+  if (globalCOM[0]>minX && globalCOM[0]<maxX &&
+      globalCOM[2]>minZ && globalCOM[2]<maxZ){
+    return true;
+  } else {
+    return false;
+  }
 }
 
 /* Input from keyboard and joystick */

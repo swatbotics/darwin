@@ -15,7 +15,8 @@ class ForwardKinematics {
   void setAngle(int index, float value);
   float getAngle(int index);
   bool isUpdated();
-
+  void printTrans(int index);
+  void printTrans(const float trans[][4]);
 
  private:
   Darwin _myDar;

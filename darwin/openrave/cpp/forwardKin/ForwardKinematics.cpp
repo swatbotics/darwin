@@ -25,7 +25,13 @@ ForwardKinematics::ForwardKinematics(){
   update();
 }
 
-void printTrans(const float trans[][4]){
+void ForwardKinematics::printTrans(int index){
+  float T[3][4];
+  getTransform(index, T);
+  printTrans(T);
+}
+
+void ForwardKinematics::printTrans(const float trans[][4]){
   for (int i=0; i<3; i++){
     printf("%f, %f, %f, %f \n", trans[i][0], trans[i][1]
 	   , trans[i][2], trans[i][3]);
@@ -46,8 +52,7 @@ void ForwardKinematics::update(){
       generateJointTrans(_myDar.Links[linkNum].AXIS,
 			 _angles[linkNum-1],
 			 jointTrans);
-      if (&(_myDar.Links[linkNum]) 
-	  == _myDar.Chains[chainNum].FIRST){
+      if (_myDar.Links[linkNum].PREVIOUS==0){
 	multiplyTransforms(_myDar.Chains[chainNum].T_FROM_BODY,
 			   jointTrans,
 			   _transforms[linkNum]);
@@ -60,7 +65,7 @@ void ForwardKinematics::update(){
 			   _transforms[linkNum]);
       }
       // Set the next link in the chain to be updated
-      if (_myDar.Links[_requireUpdate[chainNum]].NEXT==NULL){
+      if (_myDar.Links[linkNum].NEXT==-1){
 	_requireUpdate[chainNum]=INT_MAX;
       } else {
 	_requireUpdate[chainNum]++;
@@ -156,18 +161,23 @@ void ForwardKinematics::getTransform(int index, float result[][4]){
     printf("attempting to get transform on link %d.\n", index);
     std::exit(-1);
   } else {
-    result = _transforms[index];
+    for (int i=0; i<3; i++){
+      for (int j=0; j<4; j++){
+	result[i][j] = _transforms[index][i][j];
+      }
+    }
   }
 }
 
 void ForwardKinematics::setAngle(int index, float value){
+  // the link corresponding to joint i is link i+1
   if (index<0 || index >=_numJoints){
     printf("attempting to change angle on joint %d.\n", index);
     std::exit(-1);
   } else {
     _angles[index] = value;
-    _requireUpdate[getChainNum(index)] = 
-      std::min(index,_requireUpdate[getChainNum(index)]) ;
+    _requireUpdate[getChainNum(index+1)] = 
+      std::min(index+1,_requireUpdate[getChainNum(index+1)]) ;
   }
   return;
 }
