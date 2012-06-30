@@ -5,7 +5,9 @@
 *.[oa]
 *~
 *.swp
+*.gch
+#*
 *#
-*.#
+.#*
 *.DS_Store
 a.out
