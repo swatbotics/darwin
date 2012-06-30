@@ -81,8 +81,8 @@ struct link{
   std::string NAME;
   float MASS;            // Mass of link
   float COM[3];          // Center of mass in the link frame
-  struct link* PREVIOUS; // Pointer to previous link
-  struct link* NEXT;     // Pointer to next link
+  int PREVIOUS;          // Index of previous link
+  int NEXT;              // Index of next link (-1 for end links)
   float T_PREV2NEXT[3][4]; // Transform from link frame to next joint
                          // as top 3 rows of transform matrix
   float AXIS[3];         // Axis of rotation for this link
@@ -92,7 +92,7 @@ struct link{
     output.write(
 """
 struct chain{
-  struct link* FIRST;
+  int FIRST;
   float T_FROM_BODY[3][4];
 };
 
@@ -144,10 +144,10 @@ Darwin::Darwin(){
                             index1=i, index2=j, comvalue='%f' 
                             % COM[i][j])) for j in range(3)),
 
-           nextlink="NULL" if i in lasts else 
-           "&Links[{nextindex}]".format(nextindex=str(i+1)),
-           prevlink="&Links[0]" if i in firsts else "NULL" if i in body else 
-           "&Links[{nextindex}]".format(nextindex=str(i-1)),
+           nextlink="-1" if i in lasts else 
+           "{nextindex}".format(nextindex=str(i+1)),
+           prevlink="0" if i in firsts else "-1" if i in body else 
+           "{previndex}".format(previndex=str(i-1)),
 
            axis='\n'.join(
                     ('  Links[{index1}].AXIS[{index2}] = {axisvalue};'.format(
@@ -175,7 +175,7 @@ Darwin::Darwin(){
                             links[firsts[i]].GetTransform())
         output.write(
 """\
-  Chains[{index}].FIRST = &Links[{first}];
+  Chains[{index}].FIRST = {first};
 {transform}
 
 """.format(index=i,first=firsts[i], 

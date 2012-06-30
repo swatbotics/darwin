@@ -7,3 +7,4 @@ add_subdirectory(build)
 set(DARWIN_LIBS darwin pthread jpeg rt)
 
 add_subdirectory(project)
+add_subdirectory(openrave)
