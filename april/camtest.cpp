@@ -1,38 +1,46 @@
 #include "TagDetector.h"
+
+#include <sys/time.h>
 #include <iostream>
+
+#include <gflags/gflags.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+
 #include "CameraUtil.h"
-#include <sys/time.h>
+
+DEFINE_int32(device_num, 0,
+             "Device number for video device to parse for tag information.");
+DEFINE_double(focal_length, 500,
+              "Focal length of the camera represented by the video device.");
+DEFINE_string(tag_family, "Tag36h11",
+              "Tag family to use for detections.");
+DEFINE_double(tag_size, 0.1905,
+              "Tag size in meters of the tags to detect.");
+DEFINE_int32(frame_width, 640, "Desired video frame width.");
+DEFINE_int32(frame_height, 480, "Desired video frame height.");
+DEFINE_bool(decimate, false, "Set to use decimation for tag detection.");
+DEFINE_bool(mirror_display, false,
+            "Whether to flip display window image horizontally.");
 
 int main(int argc, char** argv) {
-
-  const std::string dstr = "--decimate";
-
-  if (argc < 3 || argc > 4 || (argc == 4 && argv[3] != dstr)) {
-    std::cerr << "Usage: " << argv[0] << " TAGFAMILY DEVICE [--decimate]\n";
-    std::cerr << "Known tag families:";
-    TagFamily::StringArray known = TagFamily::families();
-    for (size_t i=0; i<known.size(); ++i) { std::cerr << " " << known[i]; }
-    std::cerr << "\n";
-    return 1;
+  std::string usage;
+  usage += std::string("Usage: ") + argv[0] + std::string(" [OPTIONS]\n");
+  usage += std::string("Known tag families:");
+  TagFamily::StringArray known = TagFamily::families();
+  for (size_t i = 0; i < known.size(); ++i) {
+    usage += std::string(" ") + known[i];
   }
-  
+  gflags::SetUsageMessage(usage);
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+
   cv::VideoCapture vc;
-
-  char* endptr;
-  int device = strtol(argv[2], &endptr, 10);
-
-  if (endptr && !*endptr) {
-    vc.open(device);
-  } else {
-    vc.open(argv[2]);
-  }
+  vc.open(FLAGS_device_num);
 
   // Use uvcdynctrl to figure this out dynamically at some point?
-  vc.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
-  vc.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
+  vc.set(CV_CAP_PROP_FRAME_WIDTH, FLAGS_frame_width);
+  vc.set(CV_CAP_PROP_FRAME_HEIGHT, FLAGS_frame_height);
 
   std::cout << "Set camera to resolution: "
             << vc.get(CV_CAP_PROP_FRAME_WIDTH) << "x"
@@ -52,9 +60,9 @@ int main(int argc, char** argv) {
 
   std::string win = "Cam tag test";
 
-  TagFamily family(argv[1]);
+  TagFamily family(FLAGS_tag_family);
   TagDetectorParams params;
-  if (argc == 4 && argv[3] == dstr) {
+  if (FLAGS_decimate) {
     params.segDecimate = true;
     std::cout << "will decimate for segmentation!\n";
   }
@@ -81,7 +89,7 @@ int main(int argc, char** argv) {
       //show = family.superimposeDetections(frame, detections);
       show = frame;
 
-      double s = 0.1905;
+      double s = FLAGS_tag_size;
       double ss = 0.5*s;
       double sz = s;
 
@@ -119,7 +127,7 @@ int main(int argc, char** argv) {
 
       cv::Point2d dst[npoints];
 
-      double f = 500;
+      double f = FLAGS_focal_length;
 
       double K[9] = {
         f, 0, opticalCenter.x,
@@ -180,7 +188,9 @@ int main(int argc, char** argv) {
 
     }
 
-    cv::flip(show, show, 1);
+    if (FLAGS_mirror_display) {
+      cv::flip(show, show, 1);
+    }
 
     cv::imshow(win, show);
     int k = cv::waitKey(5);

@@ -78,6 +78,9 @@ Explorer::~Explorer() {}
 void Explorer::Initialize() {
   printf("\n===== INIT EXPLORER =====\n\n");
 
+  // To make relative filenames work.
+  change_dir_from_root("darwin/Linux/project/april_tags");
+
   // NOTE: Must initialize camera before framework!
   InitializeCamera();
 

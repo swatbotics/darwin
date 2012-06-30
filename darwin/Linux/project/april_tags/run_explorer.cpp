@@ -5,8 +5,6 @@
 
 int main(void) {
   printf( "\n===== April Tag Test for DARwIn =====\n\n");
-  change_current_dir();  // To make relative filenames work.
-
   Explorer explorer;
   explorer.Initialize();
   record_elapsed_time();

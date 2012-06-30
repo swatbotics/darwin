@@ -12,6 +12,8 @@ set(APRILTAG_INCLUDE_DIRS ${PROJECT_SOURCE_DIR} CACHE INTERNAL "" FORCE)
 include_directories(${OPENCV_INCLUDE_DIRS})
 link_directories(${OPENCV_LIBRARY_DIRS})
 
+include_directories(${GFLAGS_INCLUDE_DIRS})
+
 add_library(apriltagcpp 
   CameraUtil.cpp
   Geometry.cpp 
@@ -24,10 +26,13 @@ add_library(apriltagcpp
 )
 
 add_executable(camtest camtest.cpp)
-target_link_libraries(camtest apriltagcpp ${OPENCV_LIBRARIES})
+target_link_libraries(camtest apriltagcpp ${OPENCV_LIBRARIES} gflags)
 
 add_executable(tagtest tagtest.cpp)
 target_link_libraries(tagtest apriltagcpp ${OPENCV_LIBRARIES})
+
+add_executable(calibrate calibrate.cpp)
+target_link_libraries(calibrate apriltagcpp ${OPENCV_LIBRARIES})
 
 add_executable(maketags maketags.cpp)
 target_link_libraries(maketags apriltagcpp ${CAIRO_LIBRARIES} ${OPENCV_LIBRARIES})
