@@ -2,7 +2,9 @@
 
 #include <algorithm>  // For min() and max().
 #include <cstdio>
+#include <cstdlib>
 #include <libgen.h>  // For dirname().
+#include <string>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -33,6 +35,21 @@ double record_elapsed_time() {
   double elapsed_time = this_time - last_time;
   last_time = this_time;
   return elapsed_time;
+}
+
+void change_dir_from_root(const char* relpath) {
+  const char* root_dir_path = getenv("DARWIN_ROOT");
+  if (root_dir_path != NULL) {
+    std::string path(root_dir_path);
+    path += std::string("/") + std::string(relpath);
+    if (chdir(path.c_str()) != 0) {
+      fprintf(stderr, "Error changing directory to: %s\n", path.c_str());
+      exit(1);
+    }
+  } else {
+    fprintf(stderr, "Error reading DARWIN_ROOT environment variable!\n");
+    exit(1);
+  }
 }
 
 void change_current_dir() {

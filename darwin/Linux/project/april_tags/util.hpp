@@ -14,6 +14,8 @@ double get_time_as_double();
 
 double record_elapsed_time();
 
+void change_dir_from_root(const char* relpath);
+
 void change_current_dir();
 
 inline bool in_range(double value, double min, double max) {
