@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 
+#include <april/CameraUtil.h>
 #include <boost/bind.hpp>
 #include <gflags/gflags.h>
 
@@ -10,6 +11,8 @@
 
 DEFINE_int32(device_num, 0,
              "Device number for video device to parse for tag information.");
+DEFINE_double(focal_length, 500,
+              "Focal length of the camera represented by the video device.");
 DEFINE_string(tag_family, "Tag36h11",
               "Tag family to use for detections.");
 DEFINE_int32(frame_width, 640, "Desired video frame width.");
@@ -21,10 +24,22 @@ DEFINE_int32(server_port, 9000,
 
 namespace asio = boost::asio;
 
+const LocalizationServer::ReferenceTag
+LocalizationServer::reference_tags_[] = {
+  {0, {0, 0, 0}},
+  {1, {0, kReferenceTagInterval, 0}},
+  {2, {kReferenceTagInterval, 0, 0}},
+  {3, {kReferenceTagInterval, kReferenceTagInterval, 0}}
+};
+
 LocalizationServer::LocalizationServer() :
     vc_(),
     tag_family_(FLAGS_tag_family),
     detector_(tag_family_),
+    detections_(),
+    ref_tags_(),
+    obj_tags_(),
+    global_transform_(3, 3),
     data_mutex_(),
     localization_data_(),
     io_service_(),
@@ -32,9 +47,9 @@ LocalizationServer::LocalizationServer() :
     remote_endpoint_(),
     recv_buffer_()
 {
-  detector_.params.segDecimate = true;
-  detector_.params.thetaThresh = 25;
-  detector_.params.refineCornersSubPix = true;
+  //  detector_.params.segDecimate = true;
+  //  detector_.params.thetaThresh = 25;
+  //  detector_.params.refineCornersSubPix = true;
   InitializeVideoDevice();
 }
 
@@ -52,34 +67,117 @@ void LocalizationServer::InitializeVideoDevice() {
 }
 
 void LocalizationServer::RunLocalization() {
-  TagDetectionArray detections;
-  cv::Mat frame;
   double lasttime = get_time_as_double();
   while (true) {
-    vc_ >> frame;
-    if (frame.empty()) {
-      std::cerr << "Got empty frame!\n";
-      exit(1);
-    }
-    const cv::Point2d optical_center(frame.cols * 0.5, frame.rows * 0.5);
-    detector_.process(frame, optical_center, detections);
-    for (size_t i = 0; i < detections.size(); ++i) {
-      /*
-      const TagDetection& d = detections[i];
-      std::cout << " - Detection: id = " << d.id << ", "
-                << "code = " << d.code << ", "
-                << "rotation = " << d.rotation << "\n";
-      */
-    }
-    std::stringstream sstream;
-    sstream << detections.size();
-    {
-      boost::lock_guard<boost::mutex> lock(data_mutex_);
-      localization_data_ = sstream.str();
-    }
+    RunTagDetection();
+    FindGlobalTransform();
+    LocalizeObjects();
+    GenerateLocalizationData();
     double thistime = get_time_as_double();
     printf("FPS: %d\n", (int) (1 / (thistime - lasttime)));
     lasttime = thistime;
+  }
+}
+
+void LocalizationServer::RunTagDetection() {
+  cv::Mat frame;
+  vc_ >> frame;
+  if (frame.empty()) {
+    std::cerr << "Got empty frame!\n";
+    exit(1);
+  }
+  const cv::Point2d optical_center(frame.cols * 0.5, frame.rows * 0.5);
+  detector_.process(frame, optical_center, detections_);
+  const size_t reference_tags_size = (sizeof(reference_tags_) /
+                                      sizeof(reference_tags_[0]));
+  ref_tags_.clear();
+  obj_tags_.clear();
+  for (size_t i = 0; i < detections_.size(); ++i) {
+    const TagDetection& d = detections_[i];
+    bool is_ref_tag = false;
+    size_t j = 0;
+    for (j = 0; j < reference_tags_size; ++j) {
+      if ((is_ref_tag = (reference_tags_[j].id == d.id))) break;
+    }
+    if (is_ref_tag) {
+      TagInfo tag = GetTagInfo(d, kReferenceTagSize);
+      tag.t.create(3, 1);
+      for (size_t k = 0; k < 3; ++k) {
+        tag.t[0][k] = reference_tags_[j].pos[k];
+      }
+      ref_tags_[tag.id] = tag;
+    } else {
+      TagInfo tag = GetTagInfo(d, kObjectTagSize);
+      obj_tags_[tag.id] = tag;
+    }
+  }
+}
+
+LocalizationServer::TagInfo LocalizationServer::GetTagInfo(
+    const TagDetection& detection, double tag_size) {
+  TagInfo tag;
+  tag.id = detection.id;
+  tag.center = detection.cxy;
+  const double f = FLAGS_focal_length;
+  CameraUtil::homographyToPoseCV(f, f, tag_size,
+                                 detection.homography, tag.raw_r, tag.raw_t);
+  return tag;
+}
+
+void LocalizationServer::FindGlobalTransform() {
+  if (ref_tags_.size() < 3) {
+    // TODO: Develop strategies for localizing with only 1-2 tags, using
+    // the tag rotation matrices. Or:
+    // TODO: Implement a "memory" for previously seen reference tags, to
+    // avoid having to degrade localization when tags flicker out?
+    std::cout << "Cannot localize with less than 3 tags!\n";
+    return;
+  }
+  cv::Mat_<double> ref_points(3, 3);
+  cv::Mat_<double> cam_points(3, 3);
+  TagInfoMap::const_iterator it = ref_tags_.begin();
+  for (size_t i = 0; i < 3; ++i) {
+    const TagInfo& ref_tag = (it++)->second;
+    for (size_t j = 0; j < 3; ++j) {
+      ref_points[j][i] = ref_tag.t[j][0];
+      cam_points[j][i] = ref_tag.raw_t[j][0];
+    }
+  }
+  // TODO: This transform generation scheme is broken because all three
+  // reference points used have z-coordinate 0, so the resulting transform
+  // has no z-information and always outputs a 0 for that coordinate.
+  std::cout << "ref_points = \n" << ref_points << "\n";
+  std::cout << "cam_points = \n" << cam_points << "\n";
+  global_transform_ = ref_points * cam_points.inv();
+  std::cout << "global_transform_ = \n" << global_transform_ << "\n";
+  std::cout << "new_ref_points = \n"
+            << global_transform_ * cam_points << "\n";
+}
+
+void LocalizationServer::LocalizeObjects() {
+  for (TagInfoMap::iterator it = obj_tags_.begin();
+       it != obj_tags_.end(); ++it) {
+    TagInfo& tag = it->second;
+    std::cout << "raw_t\n" << tag.raw_t << "\n";
+    tag.t = global_transform_ * tag.raw_t;
+    printf("Object (id #%zd) at (%.2f, %.2f, %.2f)\n",
+           tag.id, tag.t[0][0], tag.t[1][0], tag.t[2][0]);
+  }
+}
+
+void LocalizationServer::GenerateLocalizationData() {
+  std::stringstream sstream;
+  for (TagInfoMap::iterator it = obj_tags_.begin();
+       it != obj_tags_.end(); ++it) {
+    TagInfo& tag = it->second;
+    sstream << tag.id << " @ "
+            << tag.t[0][0] << " "
+            << tag.t[1][0] << " "
+            << tag.t[2][0] << "\n";
+  }
+  {
+    boost::lock_guard<boost::mutex> lock(data_mutex_);
+    localization_data_ = sstream.str();
   }
 }
 
