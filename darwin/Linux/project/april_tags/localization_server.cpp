@@ -24,8 +24,8 @@ DEFINE_int32(server_port, 9000,
 
 namespace asio = boost::asio;
 
-const LocalizationServer::ReferenceTag
-LocalizationServer::reference_tags_[] = {
+const LocalizationServer::ReferenceTagCoords
+LocalizationServer::reference_tag_coords_[] = {
   {0, {0, 0, 0}},
   {1, {0, kReferenceTagInterval, 0}},
   {2, {kReferenceTagInterval, 0, 0}},
@@ -88,22 +88,22 @@ void LocalizationServer::RunTagDetection() {
   }
   const cv::Point2d optical_center(frame.cols * 0.5, frame.rows * 0.5);
   detector_.process(frame, optical_center, detections_);
-  const size_t reference_tags_size = (sizeof(reference_tags_) /
-                                      sizeof(reference_tags_[0]));
+  const size_t reference_tags_num = (sizeof(reference_tag_coords_) /
+                                     sizeof(reference_tag_coords_[0]));
   ref_tags_.clear();
   obj_tags_.clear();
   for (size_t i = 0; i < detections_.size(); ++i) {
     const TagDetection& d = detections_[i];
     bool is_ref_tag = false;
     size_t j = 0;
-    for (j = 0; j < reference_tags_size; ++j) {
-      if ((is_ref_tag = (reference_tags_[j].id == d.id))) break;
+    for (j = 0; j < reference_tags_num; ++j) {
+      if ((is_ref_tag = (reference_tag_coords_[j].id == d.id))) break;
     }
     if (is_ref_tag) {
       TagInfo tag = GetTagInfo(d, kReferenceTagSize);
       tag.t.create(3, 1);
-      for (size_t k = 0; k < 3; ++k) {
-        tag.t[0][k] = reference_tags_[j].pos[k];
+      for (int k = 0; k < tag.t.rows; ++k) {
+        tag.t[k][0] = reference_tag_coords_[j].pos[k];
       }
       ref_tags_[tag.id] = tag;
     } else {

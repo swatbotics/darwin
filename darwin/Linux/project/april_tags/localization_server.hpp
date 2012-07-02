@@ -34,14 +34,14 @@ class LocalizationServer {
     cv::Mat_<double> t;
   };
   typedef std::map<size_t, TagInfo> TagInfoMap;
-  struct ReferenceTag {
+  struct ReferenceTagCoords {
     size_t id;
     double pos[3];
   };
   static const double kObjectTagSize = 0.10;
   static const double kReferenceTagSize = 0.10;
   static const double kReferenceTagInterval = 0.605;
-  static const ReferenceTag reference_tags_[];
+  static const ReferenceTagCoords reference_tag_coords_[];
 
   void InitializeVideoDevice();
   void RunLocalization();
