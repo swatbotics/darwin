@@ -230,9 +230,9 @@ static const int jointInd_robot2rave[20] = {17,14,18,15,19,16,//arms
 
 bool COMinbounds(std::vector<IKReal> sol_l, std::vector<IKReal> sol_r,
 		 IKReal* bodytrans, IKReal* bodyrot, ForwardKinematics myKin){
-  float maxX = .05;
+  float maxX = .03;
   float minX = -maxX;
-  float maxZ = .03;
+  float maxZ = .02;
   float minZ = -maxZ;
   
 
