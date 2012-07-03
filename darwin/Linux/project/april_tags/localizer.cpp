@@ -103,8 +103,7 @@ void Localizer::Run(DataCallbackFunc* data_callback) {
     }
     LocalizeObjects();
     if (FLAGS_show_display) {
-      cv::imshow(kWindowName, frame_);
-      cv::waitKey(5);
+      ShowVisualDisplay();
     }
     GenerateLocalizationData(data_callback);
     double thistime = get_time_as_double();
@@ -134,12 +133,13 @@ void Localizer::RunTagDetection() {
     }
     if (is_ref_tag) {
       TagInfo tag(d, kReferenceTagSize);
-      std::cout << "ref tag " << tag.id << " raw_t = \n" << tag.raw_t << "\n";
+      if (DEBUG) {
+        std::cout << "ref tag " << tag.id << " raw_t = " << tag.raw_t << "\n";
+      }
       for (int k = 0; k < tag.t.rows; ++k) {
         tag.t[k][0] = reference_tag_coords_[j].pos[k];
       }
       ref_tags_[tag.id] = tag;
-      DrawTag(tag, CV_RGB(0, 0, 0));
     } else {
       TagInfo tag(d, kObjectTagSize);
       obj_tags_[tag.id] = tag;
@@ -254,6 +254,34 @@ cv::Mat_<double> Localizer::TransformToCamera(
   return global_rotation_.inv() * (vec - global_translation_);
 }
 
+void Localizer::LocalizeObjects() {
+  for (TagInfoMap::iterator it = obj_tags_.begin();
+       it != obj_tags_.end(); ++it) {
+    TagInfo& tag = it->second;
+    if (DEBUG) std::cout << "raw_t = " << tag.raw_t << "\n";
+    tag.t = TransformToGlobal(tag.raw_t);
+    printf("Object (id #%zd) at (%.2f, %.2f, %.2f)\n",
+           tag.id, tag.t[0][0], tag.t[1][0], tag.t[2][0]);
+  }
+}
+
+void Localizer::ShowVisualDisplay() {
+  const cv::Scalar& ref_tag_color = CV_RGB(0, 0, 0);
+  const cv::Scalar& obj_tag_color = CV_RGB(0, 255, 0);
+  for (TagInfoMap::iterator it = ref_tags_.begin();
+       it != ref_tags_.end(); ++it) {
+    TagInfo& tag = it->second;
+    DrawTag(tag, ref_tag_color);
+  }
+  for (TagInfoMap::iterator it = obj_tags_.begin();
+       it != obj_tags_.end(); ++it) {
+    TagInfo& tag = it->second;
+    DrawTag(tag, obj_tag_color);
+  }
+  cv::imshow(kWindowName, frame_);
+  cv::waitKey(5);
+}
+
 void Localizer::DrawTag(const TagInfo& tag, const cv::Scalar& color) {
   static const int npoints = 8;
   static const int nedges = 12;
@@ -292,18 +320,6 @@ void Localizer::DrawTag(const TagInfo& tag, const cv::Scalar& color) {
              dstmat(edges[j][1],0),
              color,
              1, CV_AA);
-  }
-}
-
-void Localizer::LocalizeObjects() {
-  for (TagInfoMap::iterator it = obj_tags_.begin();
-       it != obj_tags_.end(); ++it) {
-    TagInfo& tag = it->second;
-    std::cout << "raw_t\n" << tag.raw_t << "\n";
-    tag.t = global_rotation_ * tag.raw_t + global_translation_;
-    printf("Object (id #%zd) at (%.2f, %.2f, %.2f)\n",
-           tag.id, tag.t[0][0], tag.t[1][0], tag.t[2][0]);
-    DrawTag(tag, CV_RGB(0, 255, 0));
   }
 }
 

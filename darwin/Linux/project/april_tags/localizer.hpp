@@ -57,8 +57,9 @@ class Localizer {
   double GetLocalizationError();
   cv::Mat_<double> TransformToGlobal(const cv::Mat_<double>& vec);
   cv::Mat_<double> TransformToCamera(const cv::Mat_<double>& vec);
-  void DrawTag(const TagInfo& tag, const cv::Scalar& color);
   void LocalizeObjects();
+  void ShowVisualDisplay();
+  void DrawTag(const TagInfo& tag, const cv::Scalar& color);
   void GenerateLocalizationData(DataCallbackFunc* data_callback);
 
   cv::VideoCapture vc_;
