@@ -50,6 +50,7 @@ class LocalizationServer {
   static const double kReferenceTagInterval = 0.605;
   static const ReferenceTagCoords reference_tag_coords_[];
   static const ReferenceTagSystem reference_tag_system_;
+  static const char* kWindowName;
 
   void InitializeVideoDevice();
   void RunLocalization();
@@ -58,6 +59,7 @@ class LocalizationServer {
   void FindGlobalTransform();
   cv::Mat_<double> TransformToGlobal(const cv::Mat_<double>& vec);
   cv::Mat_<double> TransformToCamera(const cv::Mat_<double>& vec);
+  void DrawTag(const TagInfo& tag, const cv::Scalar& color);
   void LocalizeObjects();
   void GenerateLocalizationData();
   void ReceiveRequest();

@@ -5,6 +5,7 @@
 
 #include <april/CameraUtil.h>
 #include <boost/bind.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
 #include <gflags/gflags.h>
 
 #include "util.hpp"
@@ -21,6 +22,7 @@ DEFINE_int32(frame_width, 640, "Desired video frame width.");
 DEFINE_int32(frame_height, 480, "Desired video frame height.");
 DEFINE_int32(server_port, 9000,
              "Port on which to run UDP localization service.");
+DEFINE_bool(show_display, false, "Show a visual display of detections.");
 
 #define DEBUG false
 
@@ -39,6 +41,8 @@ LocalizationServer::reference_tag_coords_[] = {
 
 const LocalizationServer::ReferenceTagSystem
 LocalizationServer::reference_tag_system_ = {0, 2, 1};
+
+const char* LocalizationServer::kWindowName = "Localization Server";
 
 LocalizationServer::LocalizationServer() :
     vc_(),
@@ -83,6 +87,10 @@ void LocalizationServer::RunLocalization() {
     RunTagDetection();
     FindGlobalTransform();
     LocalizeObjects();
+    if (FLAGS_show_display) {
+      cv::imshow(kWindowName, frame_);
+      cv::waitKey(5);
+    }
     GenerateLocalizationData();
     double thistime = get_time_as_double();
     printf("FPS: %d\n", (int) (1 / (thistime - lasttime)));
@@ -117,6 +125,7 @@ void LocalizationServer::RunTagDetection() {
         tag.t[k][0] = reference_tag_coords_[j].pos[k];
       }
       ref_tags_[tag.id] = tag;
+      DrawTag(tag, CV_RGB(0, 0, 0));
     } else {
       TagInfo tag = GetTagInfo(d, kObjectTagSize);
       obj_tags_[tag.id] = tag;
@@ -241,6 +250,47 @@ cv::Mat_<double> LocalizationServer::TransformToCamera(
   return global_rotation_.inv() * (vec - global_translation_);
 }
 
+void LocalizationServer::DrawTag(const TagInfo& tag, const cv::Scalar& color) {
+  static const int npoints = 8;
+  static const int nedges = 12;
+  const double s = tag.size;
+  const double ss = 0.5*s;
+  cv::Point3d src[npoints] = {
+    cv::Point3d(-ss, -ss, 0),
+    cv::Point3d( ss, -ss, 0),
+    cv::Point3d( ss,  ss, 0),
+    cv::Point3d(-ss,  ss, 0),
+    cv::Point3d(-ss, -ss, s),
+    cv::Point3d( ss, -ss, s),
+    cv::Point3d( ss,  ss, s),
+    cv::Point3d(-ss,  ss, s),
+  };
+  static const int edges[nedges][2] = {
+    { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 },
+    { 4, 5 }, { 5, 6 }, { 6, 7 }, { 7, 4 },
+    { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 }
+  };
+  cv::Point2d dst[npoints];
+  const double f = FLAGS_focal_length;
+  double K[9] = {
+    f, 0, optical_center_.x,
+    0, f, optical_center_.y,
+    0, 0, 1
+  };
+  const cv::Mat_<cv::Point3d> srcmat(npoints, 1, src);
+  cv::Mat_<cv::Point2d> dstmat(npoints, 1, dst);
+  const cv::Mat_<double> Kmat(3, 3, K);
+  const cv::Mat_<double> distCoeffs = cv::Mat_<double>::zeros(4,1);
+  cv::projectPoints(srcmat, tag.raw_r, tag.raw_t, Kmat, distCoeffs, dstmat);
+  for (int j=0; j<nedges; ++j) {
+    cv::line(frame_,
+             dstmat(edges[j][0],0),
+             dstmat(edges[j][1],0),
+             color,
+             1, CV_AA);
+  }
+}
+
 void LocalizationServer::LocalizeObjects() {
   for (TagInfoMap::iterator it = obj_tags_.begin();
        it != obj_tags_.end(); ++it) {
@@ -249,6 +299,7 @@ void LocalizationServer::LocalizeObjects() {
     tag.t = global_rotation_ * tag.raw_t + global_translation_;
     printf("Object (id #%zd) at (%.2f, %.2f, %.2f)\n",
            tag.id, tag.t[0][0], tag.t[1][0], tag.t[2][0]);
+    DrawTag(tag, CV_RGB(0, 255, 0));
   }
 }
 
