@@ -57,6 +57,13 @@ class LocalizationServer {
   void RunTagDetection();
   TagInfo GetTagInfo(const TagDetection& detection, double tag_size);
   void FindGlobalTransform();
+  cv::Mat_<double> ComputeTransformRigid(const cv::Mat_<double>& primary_vec,
+      const cv::Mat_<double>& secondary_vec);
+  cv::Mat_<double> ComputeTransformNonRigid(
+      const cv::Mat_<double>& primary_vec,
+      const cv::Mat_<double>& secondary_vec,
+      const cv::Mat_<double>& primary_ref_vec,
+      const cv::Mat_<double>& secondary_ref_vec);
   cv::Mat_<double> TransformToGlobal(const cv::Mat_<double>& vec);
   cv::Mat_<double> TransformToCamera(const cv::Mat_<double>& vec);
   void DrawTag(const TagInfo& tag, const cv::Scalar& color);

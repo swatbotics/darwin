@@ -22,6 +22,8 @@ DEFINE_int32(frame_width, 640, "Desired video frame width.");
 DEFINE_int32(frame_height, 480, "Desired video frame height.");
 DEFINE_int32(server_port, 9000,
              "Port on which to run UDP localization service.");
+DEFINE_bool(rigid_transform, true,
+            "Require rigid transform from camera to world frame.");
 DEFINE_bool(show_display, false, "Show a visual display of detections.");
 
 #define DEBUG false
@@ -147,97 +149,90 @@ LocalizationServer::TagInfo LocalizationServer::GetTagInfo(
 
 void LocalizationServer::FindGlobalTransform() {
   if (ref_tags_.size() < 3) {
-    // TODO: Develop strategies for localizing with only 1-2 tags, using
-    // the tag rotation matrices. Or:
-    // TODO: Implement a "memory" for previously seen reference tags, to
-    // avoid having to degrade localization when tags flicker out?
-    std::cout << "Cannot localize with less than 3 tags!\n";
+    // TODO: Localize with only 1-2 tags, or remember tags to avoid flickers?
+    std::cerr << "Cannot localize with less than 3 tags!\n";
     return;
   }
   if (ref_tags_.count(reference_tag_system_.origin) == 0 ||
       ref_tags_.count(reference_tag_system_.primary) == 0 ||
       ref_tags_.count(reference_tag_system_.secondary) == 0) {
-    std::cout << "Cannot localize with this tag system!\n";
+    std::cerr << "Cannot localize with this tag system!\n";
     return;
   }
   TagInfo origin_ref = ref_tags_[reference_tag_system_.origin];
   TagInfo primary_ref = ref_tags_[reference_tag_system_.primary];
   TagInfo secondary_ref = ref_tags_[reference_tag_system_.secondary];
-
-  cv::Mat_<double> basis(3, 3);
   cv::Mat_<double> primary_vec = primary_ref.raw_t - origin_ref.raw_t;
   cv::Mat_<double> secondary_vec = secondary_ref.raw_t - origin_ref.raw_t;
+  cv::Mat_<double> primary_ref_vec = primary_ref.t - origin_ref.t;
+  cv::Mat_<double> secondary_ref_vec = secondary_ref.t - origin_ref.t;
 
-  std::cout << "primary_vec = \n" << primary_vec << "\n";
-  std::cout << primary_vec.rows << "x" << primary_vec.cols << "\n";
-  std::cout << "norm = " << cv::norm(primary_vec) << "\n";
-  std::cout << "secondary_vec = \n" << secondary_vec << "\n";
-  std::cout << secondary_vec.rows << "x" << secondary_vec.cols << "\n";
-  std::cout << "norm = " << cv::norm(secondary_vec) << "\n";
+  if (DEBUG) {
+    std::cout << "primary_vec = " << primary_vec << "("
+              << cv::norm(primary_vec) << ")\n";
+    std::cout << "secondary_vec = " << secondary_vec << "("
+              << cv::norm(secondary_vec) << ")\n";
+  }
 
-  cv::Mat_<double> primary_nvec = primary_vec / cv::norm(primary_vec);
-  cv::Mat_<double> secondary_nvec = secondary_vec / cv::norm(secondary_vec);
-  std::cout << "primary_nvec = \n" << primary_nvec << "\n";
-  std::cout << primary_nvec.rows << "x" << primary_nvec.cols << "\n";
-  std::cout << "norm = " << cv::norm(primary_nvec) << "\n";
-  std::cout << "secondary_nvec = \n" << secondary_nvec << "\n";
-  std::cout << secondary_nvec.rows << "x" << secondary_nvec.cols << "\n";
-  std::cout << "norm = " << cv::norm(secondary_nvec) << "\n";
+  if (FLAGS_rigid_transform) {
+    global_rotation_ = ComputeTransformRigid(primary_vec, secondary_vec);
+  } else {
+    global_rotation_ =
+        ComputeTransformNonRigid(primary_vec, secondary_vec,
+                                 primary_ref_vec, secondary_ref_vec);
+  }
+  global_translation_ = -global_rotation_ * origin_ref.raw_t;
 
-  cv::Mat_<double> zero = cv::Mat_<double>::zeros(3, 1);
+  std::cout << "global_rotation_ = \n" << global_rotation_ << "\n";
+  std::cout << "global_translation_ = \n" << global_translation_ << "\n";
+
+  std::cout << "recompute tag " << reference_tag_system_.origin << " = \n"
+            << TransformToGlobal(origin_ref.raw_t) << "\n";
+  std::cout << "recompute tag " << reference_tag_system_.primary << " = \n"
+            << TransformToGlobal(primary_ref.raw_t) << "\n";
+  std::cout << "recompute tag " << reference_tag_system_.secondary << " = \n"
+            << TransformToGlobal(secondary_ref.raw_t) << "\n";
+}
+
+cv::Mat_<double> LocalizationServer::ComputeTransformRigid(
+    const cv::Mat_<double>& primary_vec,
+    const cv::Mat_<double>& secondary_vec) {
+  const cv::Mat_<double> zero = cv::Mat_<double>::zeros(3, 1);
+  cv::Mat_<double> basis(3, 3);
   basis.col(0) = primary_vec + zero;
   basis.col(2) = primary_vec.cross(secondary_vec) + zero;
   basis.col(1) = basis.col(2).cross(primary_vec) + zero;
-  std::cout << "basis raw = \n" << basis << "\n";
+  if (DEBUG) std::cout << "basis raw = \n" << basis << "\n";
+
   basis.col(0) /= cv::norm(basis.col(0));
   basis.col(1) /= cv::norm(basis.col(1));
   basis.col(2) /= cv::norm(basis.col(2));
-  std::cout << "basis normed = \n" << basis << "\n";
+  if (DEBUG) std::cout << "basis normed = \n" << basis << "\n";
 
-  cv::Mat_<double> oldbasis(3, 3);
-  oldbasis.col(0) = primary_nvec + zero;
-  oldbasis.col(2) = primary_nvec.cross(secondary_nvec) + zero;
-  oldbasis.col(1) = oldbasis.col(2).cross(primary_nvec) + zero;
-  std::cout << "basis old = \n" << oldbasis << "\n";
+  if (DEBUG) std::cout << "basis check = \n" << basis * basis.t() << "\n";
 
-  std::cout << "basis check = \n" << basis * basis.t() << "\n";
+  return basis.t();
+}
 
-  global_rotation_ = basis.t();
-  std::cout << "global_rotation_ = \n" << global_rotation_ << "\n";
-  global_translation_ = -global_rotation_ * origin_ref.raw_t;
-  std::cout << "global_translation_ = \n" << global_translation_ << "\n";
-
-  std::cout << "recompute tag " << reference_tag_system_.origin << " = \n"
-            << TransformToGlobal(origin_ref.raw_t) << "\n";
-  std::cout << "recompute tag " << reference_tag_system_.primary << " = \n"
-            << TransformToGlobal(primary_ref.raw_t) << "\n";
-  std::cout << "recompute tag " << reference_tag_system_.secondary << " = \n"
-            << TransformToGlobal(secondary_ref.raw_t) << "\n";
-
-  LocalizeObjects();
-
+cv::Mat_<double> LocalizationServer::ComputeTransformNonRigid(
+    const cv::Mat_<double>& primary_vec,
+    const cv::Mat_<double>& secondary_vec,
+    const cv::Mat_<double>& primary_ref_vec,
+    const cv::Mat_<double>& secondary_ref_vec) {
+  const cv::Mat_<double> zero = cv::Mat_<double>::zeros(3, 1);
   cv::Mat_<double> ref_points(3, 3);
-  cv::Mat_<double> cam_points(3, 3);
-  ref_points.col(0) = primary_ref.t - origin_ref.t + zero;
-  ref_points.col(1) = secondary_ref.t - origin_ref.t + zero;
+  ref_points.col(0) = primary_ref_vec + zero;
+  ref_points.col(1) = secondary_ref_vec + zero;
   ref_points.col(2) = ref_points.col(0).cross(ref_points.col(1)) + zero;
+  cv::Mat_<double> cam_points(3, 3);
   cam_points.col(0) = primary_vec + zero;
   cam_points.col(1) = secondary_vec + zero;
   cam_points.col(2) = cam_points.col(0).cross(cam_points.col(1)) + zero;
-
-  std::cout << "ref_points = \n" << ref_points << "\n";
-  std::cout << "cam_points = \n" << cam_points << "\n";
-  global_rotation_ = ref_points * cam_points.inv();
-  std::cout << "global_rotation_ = \n" << global_rotation_ << "\n";
-  global_translation_ = -global_rotation_ * origin_ref.raw_t;
-  std::cout << "global_translation_ = \n" << global_translation_ << "\n";
-
-  std::cout << "recompute tag " << reference_tag_system_.origin << " = \n"
-            << TransformToGlobal(origin_ref.raw_t) << "\n";
-  std::cout << "recompute tag " << reference_tag_system_.primary << " = \n"
-            << TransformToGlobal(primary_ref.raw_t) << "\n";
-  std::cout << "recompute tag " << reference_tag_system_.secondary << " = \n"
-            << TransformToGlobal(secondary_ref.raw_t) << "\n";
+  if (DEBUG) {
+    std::cout << "ref_points = \n" << ref_points << "\n";
+    std::cout << "cam_points = \n" << cam_points << "\n";
+  }
+  return ref_points * cam_points.inv();
 }
 
 cv::Mat_<double> LocalizationServer::TransformToGlobal(
