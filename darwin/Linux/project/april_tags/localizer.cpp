@@ -44,6 +44,24 @@ Localizer::reference_tag_system_ = {0, 2, 1};
 
 const char* Localizer::kWindowName = "Localization Server";
 
+Localizer::TagInfo::TagInfo() :
+    id(0),
+    size(0),
+    center(0,0),
+    raw_r(cv::Mat_<double>::zeros(3, 3)),
+    raw_t(cv::Mat_<double>::zeros(3, 1)),
+    t(cv::Mat_<double>::zeros(3, 1)) {
+}
+
+Localizer::TagInfo::TagInfo(const TagDetection& d, double tag_size) {
+  id = d.id;
+  size = tag_size;
+  center = d.cxy;
+  const double f = FLAGS_focal_length;
+  CameraUtil::homographyToPoseCV(f, f, tag_size, d.homography, raw_r, raw_t);
+  t = cv::Mat_<double>::zeros(3, 1);
+}
+
 Localizer::Localizer() :
     vc_(),
     frame_(),
@@ -115,31 +133,18 @@ void Localizer::RunTagDetection() {
       if ((is_ref_tag = (reference_tag_coords_[j].id == d.id))) break;
     }
     if (is_ref_tag) {
-      TagInfo tag = GetTagInfo(d, kReferenceTagSize);
+      TagInfo tag(d, kReferenceTagSize);
       std::cout << "ref tag " << tag.id << " raw_t = \n" << tag.raw_t << "\n";
-      tag.t.create(3, 1);
       for (int k = 0; k < tag.t.rows; ++k) {
         tag.t[k][0] = reference_tag_coords_[j].pos[k];
       }
       ref_tags_[tag.id] = tag;
       DrawTag(tag, CV_RGB(0, 0, 0));
     } else {
-      TagInfo tag = GetTagInfo(d, kObjectTagSize);
+      TagInfo tag(d, kObjectTagSize);
       obj_tags_[tag.id] = tag;
     }
   }
-}
-
-Localizer::TagInfo Localizer::GetTagInfo(
-    const TagDetection& detection, double tag_size) {
-  TagInfo tag;
-  tag.id = detection.id;
-  tag.size = tag_size;
-  tag.center = detection.cxy;
-  const double f = FLAGS_focal_length;
-  CameraUtil::homographyToPoseCV(f, f, tag_size,
-                                 detection.homography, tag.raw_r, tag.raw_t);
-  return tag;
 }
 
 void Localizer::FindGlobalTransform() {

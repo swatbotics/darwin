@@ -18,12 +18,13 @@ class Localizer {
 
  private:
   struct TagInfo {
+    TagInfo();
+    TagInfo(const TagDetection& d, double tag_size);
     size_t id;
     double size;
     cv::Point2d center;
     cv::Mat_<double> raw_r;
     cv::Mat_<double> raw_t;
-    cv::Mat_<double> inv_t;
     cv::Mat_<double> t;
   };
   typedef std::map<size_t, TagInfo> TagInfoMap;
@@ -45,7 +46,6 @@ class Localizer {
 
   void InitializeVideoDevice();
   void RunTagDetection();
-  TagInfo GetTagInfo(const TagDetection& detection, double tag_size);
   void FindGlobalTransform();
   cv::Mat_<double> ComputeTransformRigid(const cv::Mat_<double>& primary_vec,
       const cv::Mat_<double>& secondary_vec);
