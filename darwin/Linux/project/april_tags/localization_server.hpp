@@ -28,9 +28,11 @@ class LocalizationServer {
  private:
   struct TagInfo {
     size_t id;
+    double size;
     cv::Point2d center;
     cv::Mat_<double> raw_r;
     cv::Mat_<double> raw_t;
+    cv::Mat_<double> inv_t;
     cv::Mat_<double> t;
   };
   typedef std::map<size_t, TagInfo> TagInfoMap;
@@ -38,16 +40,24 @@ class LocalizationServer {
     size_t id;
     double pos[3];
   };
-  static const double kObjectTagSize = 0.10;
-  static const double kReferenceTagSize = 0.10;
+  struct ReferenceTagSystem {
+    size_t origin;
+    size_t primary;
+    size_t secondary;
+  };
+  static const double kObjectTagSize;
+  static const double kReferenceTagSize;
   static const double kReferenceTagInterval = 0.605;
   static const ReferenceTagCoords reference_tag_coords_[];
+  static const ReferenceTagSystem reference_tag_system_;
 
   void InitializeVideoDevice();
   void RunLocalization();
   void RunTagDetection();
   TagInfo GetTagInfo(const TagDetection& detection, double tag_size);
   void FindGlobalTransform();
+  cv::Mat_<double> TransformToGlobal(const cv::Mat_<double>& vec);
+  cv::Mat_<double> TransformToCamera(const cv::Mat_<double>& vec);
   void LocalizeObjects();
   void GenerateLocalizationData();
   void ReceiveRequest();
@@ -57,12 +67,15 @@ class LocalizationServer {
                       std::size_t /*bytes_transferred*/);
 
   cv::VideoCapture vc_;
+  cv::Mat frame_;
+  cv::Point2d optical_center_;
   TagFamily tag_family_;
   TagDetector detector_;
   TagDetectionArray detections_;
   TagInfoMap ref_tags_;
   TagInfoMap obj_tags_;
-  cv::Mat_<double> global_transform_;
+  cv::Mat_<double> global_translation_;
+  cv::Mat_<double> global_rotation_;
   boost::mutex data_mutex_;
   std::string localization_data_;
   asio::io_service io_service_;
