@@ -64,6 +64,7 @@ class LocalizationServer {
       const cv::Mat_<double>& secondary_vec,
       const cv::Mat_<double>& primary_ref_vec,
       const cv::Mat_<double>& secondary_ref_vec);
+  double GetLocalizationError();
   cv::Mat_<double> TransformToGlobal(const cv::Mat_<double>& vec);
   cv::Mat_<double> TransformToCamera(const cv::Mat_<double>& vec);
   void DrawTag(const TagInfo& tag, const cv::Scalar& color);

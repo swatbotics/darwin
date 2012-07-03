@@ -24,6 +24,8 @@ DEFINE_int32(server_port, 9000,
              "Port on which to run UDP localization service.");
 DEFINE_bool(rigid_transform, true,
             "Require rigid transform from camera to world frame.");
+DEFINE_bool(show_localization_error, false,
+            "Show amount of error in localization of reference tags.");
 DEFINE_bool(show_display, false, "Show a visual display of detections.");
 
 #define DEBUG false
@@ -88,6 +90,9 @@ void LocalizationServer::RunLocalization() {
   while (true) {
     RunTagDetection();
     FindGlobalTransform();
+    if (FLAGS_show_localization_error) {
+      printf("Localization error: %f\n", GetLocalizationError());
+    }
     LocalizeObjects();
     if (FLAGS_show_display) {
       cv::imshow(kWindowName, frame_);
@@ -183,15 +188,10 @@ void LocalizationServer::FindGlobalTransform() {
   }
   global_translation_ = -global_rotation_ * origin_ref.raw_t;
 
-  std::cout << "global_rotation_ = \n" << global_rotation_ << "\n";
-  std::cout << "global_translation_ = \n" << global_translation_ << "\n";
-
-  std::cout << "recompute tag " << reference_tag_system_.origin << " = \n"
-            << TransformToGlobal(origin_ref.raw_t) << "\n";
-  std::cout << "recompute tag " << reference_tag_system_.primary << " = \n"
-            << TransformToGlobal(primary_ref.raw_t) << "\n";
-  std::cout << "recompute tag " << reference_tag_system_.secondary << " = \n"
-            << TransformToGlobal(secondary_ref.raw_t) << "\n";
+  if (DEBUG) {
+    std::cout << "global_rotation_ = \n" << global_rotation_ << "\n";
+    std::cout << "global_translation_ = \n" << global_translation_ << "\n";
+  }
 }
 
 cv::Mat_<double> LocalizationServer::ComputeTransformRigid(
@@ -233,6 +233,20 @@ cv::Mat_<double> LocalizationServer::ComputeTransformNonRigid(
     std::cout << "cam_points = \n" << cam_points << "\n";
   }
   return ref_points * cam_points.inv();
+}
+
+double LocalizationServer::GetLocalizationError() {
+  double sum_err = 0;
+  int count = 0;
+  for (TagInfoMap::const_iterator it = ref_tags_.begin();
+       it != ref_tags_.end(); ++it, ++count) {
+    const TagInfo& tag = it->second;
+    cv::Mat_<double> localized_t = TransformToGlobal(tag.raw_t);
+    cv::Mat_<double> errs = tag.t - localized_t;
+    sum_err += cv::norm(errs);
+    //    std::cout << "Ref tag " << tag.id << " = " << localized_t << "\n";
+  }
+  return sum_err / count;
 }
 
 cv::Mat_<double> LocalizationServer::TransformToGlobal(
