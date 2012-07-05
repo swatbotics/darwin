@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include <april/CameraUtil.h>
+#include <libconfig.h++>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <gflags/gflags.h>
 
@@ -17,7 +18,6 @@ DEFINE_double(focal_length, 500,
 DEFINE_string(tag_family, "Tag36h11",
               "Tag family to use for detections.");
 DEFINE_double(obj_tag_size, 0.075, "Size of object tags.");
-DEFINE_double(ref_tag_size, 0.075, "Size of reference tags.");
 DEFINE_int32(frame_width, 640, "Desired video frame width.");
 DEFINE_int32(frame_height, 480, "Desired video frame height.");
 DEFINE_bool(rigid_transform, true,
@@ -25,52 +25,60 @@ DEFINE_bool(rigid_transform, true,
 DEFINE_bool(show_localization_error, false,
             "Show amount of error in localization of reference tags.");
 DEFINE_bool(show_display, false, "Show a visual display of detections.");
+DEFINE_string(config_file, "./localizer_env.cfg",
+              "Configuration file for localization environment info.");
 
 #define DEBUG false
 
 const double Localizer::kObjectTagSize = FLAGS_obj_tag_size;
-const double Localizer::kReferenceTagSize = FLAGS_ref_tag_size;
-
-const Localizer::ReferenceTagCoords
-Localizer::reference_tag_coords_[] = {
-  {0, {0, 0, 0}},
-  {1, {0, kReferenceTagInterval, 0}},
-  {2, {kReferenceTagInterval, 0, 0}},
-  {3, {kReferenceTagInterval, kReferenceTagInterval, 0}}
-};
-
-const Localizer::ReferenceTagSystem
-Localizer::reference_tag_system_ = {0, 2, 1};
-
 const char* Localizer::kWindowName = "Localization Server";
 
 Localizer::TagInfo::TagInfo() :
     id(0),
+    detected(false),
     size(0),
-    center(0,0),
-    raw_r(cv::Mat_<double>::zeros(3, 1)),
-    raw_t(cv::Mat_<double>::zeros(3, 1)),
-    r(cv::Mat_<double>::zeros(3, 1)),
-    t(cv::Mat_<double>::zeros(3, 1)) {
+    ref_r(cv::Mat_<double>::zeros(3, 1)),
+    ref_t(cv::Mat_<double>::zeros(3, 1)) {
+  Reset();
 }
 
 Localizer::TagInfo::TagInfo(const TagDetection& d, double tag_size) {
   id = d.id;
   size = tag_size;
-  center = d.cxy;
-  const double f = FLAGS_focal_length;
-  CameraUtil::homographyToPoseCV(f, f, tag_size, d.homography, raw_r, raw_t);
+  DetectAt(d);
+}
+
+void Localizer::TagInfo::Reset() {
+  detected = false;
+  center = cv::Point2d(0, 0);
+  raw_r = cv::Mat_<double>::zeros(3, 1);
+  raw_t = cv::Mat_<double>::zeros(3, 1);
   r = cv::Mat_<double>::zeros(3, 1);
   t = cv::Mat_<double>::zeros(3, 1);
 }
 
+void Localizer::TagInfo::DetectAt(const TagDetection& d) {
+  if (size == 0) {
+    std::cerr << "Can't detect tag without specifying size!\n";
+    exit(1);
+  }
+  Reset();
+  detected = true;
+  center = d.cxy;
+  const double f = FLAGS_focal_length;
+  CameraUtil::homographyToPoseCV(f, f, size, d.homography, raw_r, raw_t);
+}
+
+
 Localizer::Localizer() :
+    config_(),
     vc_(),
     frame_(),
     optical_center_(),
     tag_family_(FLAGS_tag_family),
     detector_(tag_family_),
     detections_(),
+    ref_system_(),
     ref_tags_(),
     obj_tags_(),
     global_translation_(3, 1),
@@ -79,7 +87,37 @@ Localizer::Localizer() :
   //  detector_.params.segDecimate = true;
   //  detector_.params.thetaThresh = 25;
   //  detector_.params.refineCornersSubPix = true;
+  InitializeConfiguration();
   InitializeVideoDevice();
+}
+
+void Localizer::InitializeConfiguration() {
+  try {
+    config_.readFile(FLAGS_config_file);
+  } catch (libconfig::ConfigException& e) {
+    std::cerr << e.what() << ": Error reading configuration from file '"
+              << FLAGS_config_file << "'.\n";
+    exit(1);
+  }
+  try {
+    const libconfig::Setting& ref_config = config_.lookup("references");
+    const libconfig::Setting& ref_tag_configs = ref_config.lookup("tags");
+    for (int i = 0; i < ref_tag_configs.getLength(); ++i) {
+      const libconfig::Setting& tag_config = ref_tag_configs[i];
+      TagInfo& tag = ref_tags_[tag_config["id"]];
+      tag.id = tag_config["id"];
+      tag.size = tag_config["size"];
+      tag.ref_t[0][0] = tag_config["x"];
+      tag.ref_t[1][0] = tag_config["y"];
+      tag.ref_t[2][0] = tag_config["z"];
+    }
+    ref_system_.origin = &ref_tags_[ref_config["origin"]];
+    ref_system_.primary = &ref_tags_[ref_config["primary"]];
+    ref_system_.secondary = &ref_tags_[ref_config["secondary"]];
+  } catch (libconfig::SettingException& e) {
+    std::cerr << e.what() << ": Error with setting '" << e.getPath() << "'.\n";
+    exit(1);
+  }
 }
 
 void Localizer::InitializeVideoDevice() {
@@ -114,7 +152,19 @@ void Localizer::Run(DataCallbackFunc* data_callback) {
   }
 }
 
+void Localizer::ResetTagDetections() {
+  for (TagInfoMap::iterator it = ref_tags_.begin();
+       it != ref_tags_.end(); ++it) {
+      it->second.Reset();
+  }
+  for (TagInfoMap::iterator it = obj_tags_.begin();
+       it != obj_tags_.end(); ++it) {
+      it->second.Reset();
+  }
+}
+
 void Localizer::RunTagDetection() {
+  ResetTagDetections();
   vc_ >> frame_;
   if (frame_.empty()) {
     std::cerr << "Got empty frame!\n";
@@ -122,52 +172,30 @@ void Localizer::RunTagDetection() {
   }
   optical_center_ = cv::Point2d(frame_.cols * 0.5, frame_.rows * 0.5);
   detector_.process(frame_, optical_center_, detections_);
-  const size_t reference_tags_num = (sizeof(reference_tag_coords_) /
-                                     sizeof(reference_tag_coords_[0]));
-  ref_tags_.clear();
-  obj_tags_.clear();
   for (size_t i = 0; i < detections_.size(); ++i) {
     const TagDetection& d = detections_[i];
-    bool is_ref_tag = false;
-    size_t j = 0;
-    for (j = 0; j < reference_tags_num; ++j) {
-      if ((is_ref_tag = (reference_tag_coords_[j].id == d.id))) break;
-    }
-    if (is_ref_tag) {
-      TagInfo tag(d, kReferenceTagSize);
-      if (DEBUG) {
-        std::cout << "ref tag " << tag.id << " raw_t = " << tag.raw_t << "\n";
-      }
-      for (int k = 0; k < tag.t.rows; ++k) {
-        tag.t[k][0] = reference_tag_coords_[j].pos[k];
-      }
-      ref_tags_[tag.id] = tag;
+    if (ref_tags_.count(d.id) > 0) {
+      ref_tags_[d.id].DetectAt(d);
     } else {
-      TagInfo tag(d, kObjectTagSize);
-      obj_tags_[tag.id] = tag;
+      obj_tags_[d.id] = TagInfo(d, kObjectTagSize);
     }
   }
 }
 
 void Localizer::FindGlobalTransform() {
-  if (ref_tags_.size() < 3) {
-    // TODO: Localize with only 1-2 tags, or remember tags to avoid flickers?
-    std::cerr << "Cannot localize with less than 3 tags!\n";
+  if (ref_system_.origin == NULL || !ref_system_.origin->detected ||
+      ref_system_.primary == NULL || !ref_system_.primary->detected ||
+      ref_system_.secondary == NULL || !ref_system_.secondary->detected) {
+    std::cerr << "Cannot find full reference system for localization!\n";
     return;
   }
-  if (ref_tags_.count(reference_tag_system_.origin) == 0 ||
-      ref_tags_.count(reference_tag_system_.primary) == 0 ||
-      ref_tags_.count(reference_tag_system_.secondary) == 0) {
-    std::cerr << "Cannot localize with this tag system!\n";
-    return;
-  }
-  TagInfo origin_ref = ref_tags_[reference_tag_system_.origin];
-  TagInfo primary_ref = ref_tags_[reference_tag_system_.primary];
-  TagInfo secondary_ref = ref_tags_[reference_tag_system_.secondary];
+  const TagInfo& origin_ref = *ref_system_.origin;
+  const TagInfo& primary_ref = *ref_system_.primary;
+  const TagInfo& secondary_ref = *ref_system_.secondary;
   cv::Mat_<double> primary_vec = primary_ref.raw_t - origin_ref.raw_t;
   cv::Mat_<double> secondary_vec = secondary_ref.raw_t - origin_ref.raw_t;
-  cv::Mat_<double> primary_ref_vec = primary_ref.t - origin_ref.t;
-  cv::Mat_<double> secondary_ref_vec = secondary_ref.t - origin_ref.t;
+  cv::Mat_<double> primary_ref_vec = primary_ref.ref_t - origin_ref.ref_t;
+  cv::Mat_<double> secondary_ref_vec = secondary_ref.ref_t - origin_ref.ref_t;
 
   if (DEBUG) {
     std::cout << "primary_vec = " << primary_vec << "("
@@ -239,9 +267,8 @@ double Localizer::GetLocalizationError() {
        it != ref_tags_.end(); ++it, ++count) {
     const TagInfo& tag = it->second;
     cv::Mat_<double> localized_t = TransformToGlobal(tag.raw_t);
-    cv::Mat_<double> errs = tag.t - localized_t;
+    cv::Mat_<double> errs = tag.ref_t - localized_t;
     sum_err += cv::norm(errs);
-    //    std::cout << "Ref tag " << tag.id << " = " << localized_t << "\n";
   }
   return sum_err / count;
 }
@@ -267,7 +294,7 @@ void Localizer::LocalizeObjects() {
     tag.t = TransformToGlobal(tag.raw_t);
     if (DEBUG) std::cout << "raw_r = \n" << raw_r_mat << "\n";
     if (DEBUG) std::cout << "raw_t = " << tag.raw_t << "\n";
-    printf("Object (id #%zd) at (%.2f, %.2f, %.2f), x -> (%.2f, %.2f, %.2f)\n",
+    printf("Object (id #%d) at (%.2f, %.2f, %.2f), x -> (%.2f, %.2f, %.2f)\n",
            tag.id, tag.t[0][0], tag.t[1][0], tag.t[2][0],
            r_mat[0][0], r_mat[1][0], r_mat[2][0]);
   }

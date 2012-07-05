@@ -2,6 +2,8 @@
 #define LOCALIZER_HPP
 
 #include <string>
+
+#include <libconfig.h++>
 #include <opencv2/highgui/highgui.hpp>
 
 #include "april/TagDetector.h"
@@ -20,32 +22,32 @@ class Localizer {
   struct TagInfo {
     TagInfo();
     TagInfo(const TagDetection& d, double tag_size);
-    size_t id;
+    void Reset();
+    void DetectAt(const TagDetection& d);
+    int id;
+    bool detected;
     double size;
     cv::Point2d center;
+    cv::Mat_<double> ref_r;  // Rotation vector
+    cv::Mat_<double> ref_t;
     cv::Mat_<double> raw_r;  // Rotation vector
     cv::Mat_<double> raw_t;
     cv::Mat_<double> r;  // Rotation vector
     cv::Mat_<double> t;
   };
-  typedef std::map<size_t, TagInfo> TagInfoMap;
-  struct ReferenceTagCoords {
-    size_t id;
-    double pos[3];
+  typedef std::map<int, TagInfo> TagInfoMap;
+  struct ReferenceSystem {
+    TagInfo* origin;
+    TagInfo* primary;
+    TagInfo* secondary;
   };
-  struct ReferenceTagSystem {
-    size_t origin;
-    size_t primary;
-    size_t secondary;
-  };
+
   static const double kObjectTagSize;
-  static const double kReferenceTagSize;
-  static const double kReferenceTagInterval = 0.605;
-  static const ReferenceTagCoords reference_tag_coords_[];
-  static const ReferenceTagSystem reference_tag_system_;
   static const char* kWindowName;
 
+  void InitializeConfiguration();
   void InitializeVideoDevice();
+  void ResetTagDetections();
   void RunTagDetection();
   void FindGlobalTransform();
   cv::Mat_<double> ComputeTransformRigid(const cv::Mat_<double>& primary_vec,
@@ -63,12 +65,14 @@ class Localizer {
   void DrawTag(const TagInfo& tag, const cv::Scalar& color);
   void GenerateLocalizationData(DataCallbackFunc* data_callback);
 
+  libconfig::Config config_;
   cv::VideoCapture vc_;
   cv::Mat frame_;
   cv::Point2d optical_center_;
   TagFamily tag_family_;
   TagDetector detector_;
   TagDetectionArray detections_;
+  ReferenceSystem ref_system_;
   TagInfoMap ref_tags_;
   TagInfoMap obj_tags_;
   cv::Mat_<double> global_translation_;
