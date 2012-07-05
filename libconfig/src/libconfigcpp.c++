@@ -940,6 +940,18 @@ bool Setting::lookupValue(const char *name, std::string &value) const throw()
 
 // ---------------------------------------------------------------------------
 
+Setting & Setting::lookup(const char *name) const
+  throw(SettingNotFoundException)
+{
+  config_setting_t *s = config_setting_get_member(_setting, name);
+  if(! s)
+    throw SettingNotFoundException(*this, name);
+
+  return(Setting::wrapSetting(s));
+}
+
+// ---------------------------------------------------------------------------
+
 bool Setting::exists(const char *name) const throw()
 {
   if(_type != TypeGroup)

@@ -313,6 +313,12 @@ class LIBCONFIGXX_API Setting
 
   Setting & add(Type type) throw(SettingTypeException);
 
+  inline Setting & lookup(const std::string &name) const
+    throw(SettingNotFoundException)
+  { return(lookup(name.c_str())); }
+
+  Setting & lookup(const char *name) const throw(SettingNotFoundException);
+
   inline bool exists(const std::string &name) const throw()
   { return(exists(name.c_str())); }
 
