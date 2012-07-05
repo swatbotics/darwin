@@ -40,5 +40,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 # Put in order so that april and darwin code can link against gflags, and
 # so darwin code can link against the april library.
 add_subdirectory(gflags)
+add_subdirectory(libconfig)
 add_subdirectory(april)
 add_subdirectory(darwin)
