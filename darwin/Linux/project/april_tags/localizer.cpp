@@ -48,8 +48,9 @@ Localizer::TagInfo::TagInfo() :
     id(0),
     size(0),
     center(0,0),
-    raw_r(cv::Mat_<double>::zeros(3, 3)),
+    raw_r(cv::Mat_<double>::zeros(3, 1)),
     raw_t(cv::Mat_<double>::zeros(3, 1)),
+    r(cv::Mat_<double>::zeros(3, 1)),
     t(cv::Mat_<double>::zeros(3, 1)) {
 }
 
@@ -59,6 +60,7 @@ Localizer::TagInfo::TagInfo(const TagDetection& d, double tag_size) {
   center = d.cxy;
   const double f = FLAGS_focal_length;
   CameraUtil::homographyToPoseCV(f, f, tag_size, d.homography, raw_r, raw_t);
+  r = cv::Mat_<double>::zeros(3, 1);
   t = cv::Mat_<double>::zeros(3, 1);
 }
 
@@ -258,10 +260,16 @@ void Localizer::LocalizeObjects() {
   for (TagInfoMap::iterator it = obj_tags_.begin();
        it != obj_tags_.end(); ++it) {
     TagInfo& tag = it->second;
-    if (DEBUG) std::cout << "raw_t = " << tag.raw_t << "\n";
+    cv::Mat_<double> raw_r_mat, r_mat;
+    cv::Rodrigues(tag.raw_r, raw_r_mat);
+    r_mat = global_rotation_ * raw_r_mat;
+    cv::Rodrigues(r_mat, tag.r);
     tag.t = TransformToGlobal(tag.raw_t);
-    printf("Object (id #%zd) at (%.2f, %.2f, %.2f)\n",
-           tag.id, tag.t[0][0], tag.t[1][0], tag.t[2][0]);
+    if (DEBUG) std::cout << "raw_r = \n" << raw_r_mat << "\n";
+    if (DEBUG) std::cout << "raw_t = " << tag.raw_t << "\n";
+    printf("Object (id #%zd) at (%.2f, %.2f, %.2f), x -> (%.2f, %.2f, %.2f)\n",
+           tag.id, tag.t[0][0], tag.t[1][0], tag.t[2][0],
+           r_mat[0][0], r_mat[1][0], r_mat[2][0]);
   }
 }
 
@@ -332,7 +340,10 @@ void Localizer::GenerateLocalizationData(DataCallbackFunc* data_callback) {
       sstream << tag.id << " @ "
               << tag.t[0][0] << " "
               << tag.t[1][0] << " "
-              << tag.t[2][0] << "\n";
+              << tag.t[2][0] << " * "
+              << tag.r[0][0] << " "
+              << tag.r[1][0] << " "
+              << tag.r[2][0] << "\n";
     }
     // Call the callback with the generated data.
     (*data_callback)(sstream.str());

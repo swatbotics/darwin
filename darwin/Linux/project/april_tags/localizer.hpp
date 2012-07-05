@@ -23,8 +23,9 @@ class Localizer {
     size_t id;
     double size;
     cv::Point2d center;
-    cv::Mat_<double> raw_r;
+    cv::Mat_<double> raw_r;  // Rotation vector
     cv::Mat_<double> raw_t;
+    cv::Mat_<double> r;  // Rotation vector
     cv::Mat_<double> t;
   };
   typedef std::map<size_t, TagInfo> TagInfoMap;
