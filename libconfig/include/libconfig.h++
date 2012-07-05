@@ -393,18 +393,22 @@ class LIBCONFIGXX_API Config
   { return(readString(str.c_str())); }
 
   void readFile(const char *filename) throw(FileIOException, ParseException);
-  void writeFile(const char *filename) throw(FileIOException);
+  inline void readFile(const std::string &str)
+      throw(FileIOException, ParseException)
+  { return(readFile(str.c_str())); }
 
+  void writeFile(const char *filename) throw(FileIOException);
+  inline void writeFile(const std::string &str) throw(FileIOException)
+  { return(writeFile(str.c_str())); }
+
+  Setting & lookup(const char *path) const throw(SettingNotFoundException);
   inline Setting & lookup(const std::string &path) const
     throw(SettingNotFoundException)
   { return(lookup(path.c_str())); }
 
-  Setting & lookup(const char *path) const throw(SettingNotFoundException);
-
+  bool exists(const char *path) const throw();
   inline bool exists(const std::string & path) const throw()
   { return(exists(path.c_str())); }
-
-  bool exists(const char *path) const throw();
 
   bool lookupValue(const char *path, bool &value) const throw();
   bool lookupValue(const char *path, int &value) const throw();
