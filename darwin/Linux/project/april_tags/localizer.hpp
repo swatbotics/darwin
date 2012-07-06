@@ -98,6 +98,7 @@ class Localizer {
   TaggedObjectMap tagged_objects_;
   cv::Mat_<double> global_translation_;
   cv::Mat_<double> global_rotation_;
+  cv::Mat display_;
 };
 
 #endif  // LOCALIZER_HPP

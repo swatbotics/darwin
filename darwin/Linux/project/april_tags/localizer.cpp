@@ -25,6 +25,8 @@ DEFINE_bool(rigid_transform, true,
 DEFINE_bool(show_localization_error, false,
             "Show amount of error in localization of reference tags.");
 DEFINE_bool(show_display, false, "Show a visual display of detections.");
+DEFINE_bool(video_background, true,
+            "Use video as background of visual display.");
 DEFINE_string(config_file, "./localizer_env.cfg",
               "Configuration file for localization environment info.");
 
@@ -353,7 +355,13 @@ bool Localizer::LocalizeObjectFromTags(TaggedObject& obj) {
 }
 
 void Localizer::ShowVisualDisplay() {
-  const cv::Scalar& ref_tag_color = CV_RGB(0, 0, 0);
+  if (FLAGS_video_background) {
+    display_ = frame_;
+  } else {
+    display_ = cv::Mat(frame_.size(), frame_.type(), cv::Scalar(0, 0, 0, 0));
+  }
+  const cv::Scalar& ref_tag_color = (FLAGS_video_background ?
+                                     CV_RGB(0, 0, 0) : CV_RGB(255, 255, 255));
   const cv::Scalar& obj_tag_color = CV_RGB(0, 255, 0);
   for (TagInfoMap::const_iterator it = ref_tags_.begin();
        it != ref_tags_.end(); ++it) {
@@ -375,7 +383,7 @@ void Localizer::ShowVisualDisplay() {
     cv::Rodrigues(global_rotation_.inv(), global_r_vec_inv);
     DrawFrameAxes(global_r_vec_inv,
                   TransformToCamera(ref_system_.origin->ref_t),
-                  kGlobalFrameAxesSize, CV_RGB(0, 0, 0));
+                  kGlobalFrameAxesSize, ref_tag_color);
   }
   static const double kObjFrameAxesSize = 0.1;
   for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
@@ -390,7 +398,7 @@ void Localizer::ShowVisualDisplay() {
       DrawFrameAxes(cam_r_vec, cam_t, kObjFrameAxesSize, CV_RGB(0, 255, 0));
     }
   }
-  cv::imshow(kWindowName, frame_);
+  cv::imshow(kWindowName, display_);
   cv::waitKey(5);
 }
 
@@ -465,7 +473,7 @@ void Localizer::DrawProjectedPoints(
   const cv::Mat_<double> distCoeffs = cv::Mat_<double>::zeros(4,1);
   cv::projectPoints(points, r_vec, t_vec, Kmat, distCoeffs, proj_points);
   for (size_t i = 0; i < edges.size(); ++i) {
-    cv::line(frame_,
+    cv::line(display_,
              proj_points(edges[i].first, 0),
              proj_points(edges[i].second, 0),
              color, 1, CV_AA);
