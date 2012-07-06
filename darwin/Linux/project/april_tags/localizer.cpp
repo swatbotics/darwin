@@ -351,30 +351,71 @@ bool Localizer::LocalizeObjectFromTags(TaggedObject& obj) {
 void Localizer::ShowVisualDisplay() {
   const cv::Scalar& ref_tag_color = CV_RGB(0, 0, 0);
   const cv::Scalar& obj_tag_color = CV_RGB(0, 255, 0);
-  for (TagInfoMap::iterator it = ref_tags_.begin();
+  for (TagInfoMap::const_iterator it = ref_tags_.begin();
        it != ref_tags_.end(); ++it) {
-    TagInfo& tag = it->second;
+    const TagInfo& tag = it->second;
     if (tag.detected) {
-      DrawTag(tag, ref_tag_color);
+      DrawTagBox(tag, ref_tag_color);
     }
   }
-  for (TagInfoMap::iterator it = obj_tags_.begin();
+  for (TagInfoMap::const_iterator it = obj_tags_.begin();
        it != obj_tags_.end(); ++it) {
-    TagInfo& tag = it->second;
+    const TagInfo& tag = it->second;
     if (tag.detected) {
-      DrawTag(tag, obj_tag_color);
+      DrawTagBox(tag, obj_tag_color);
+    }
+  }
+  const double kGlobalFrameAxesSize = cv::norm(ref_system_.primary->ref_t);
+  DrawFrameAxes(ref_system_.origin->raw_r, ref_system_.origin->raw_t,
+                kGlobalFrameAxesSize, CV_RGB(0, 0, 0));
+  static const double kObjFrameAxesSize = 0.1;
+  for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
+       it != tagged_objects_.end(); ++it) {
+    const TaggedObject& obj = it->second;
+    if (obj.localized) {
+      cv::Mat_<double> obj_r_mat, cam_r_mat, cam_r_vec;
+      cv::Rodrigues(obj.r, obj_r_mat);
+      cam_r_mat = global_rotation_.inv() * obj_r_mat;
+      cv::Rodrigues(cam_r_mat, cam_r_vec);
+      cv::Mat_<double> cam_t = TransformToCamera(obj.t);
+      DrawFrameAxes(cam_r_vec, cam_t, kObjFrameAxesSize, CV_RGB(0, 255, 0));
     }
   }
   cv::imshow(kWindowName, frame_);
   cv::waitKey(5);
 }
 
-void Localizer::DrawTag(const TagInfo& tag, const cv::Scalar& color) {
+void Localizer::DrawFrameAxes(const cv::Mat_<double>& frame_r,
+                              const cv::Mat_<double>& frame_t,
+                              double size, const cv::Scalar& color) {
+  static const int npoints = 4;
+  static const int nedges = 3;
+  cv::Point3d points_raw[npoints] = {
+    cv::Point3d(0, 0, 0),
+    cv::Point3d(size, 0, 0),
+    cv::Point3d(0, size, 0),
+    cv::Point3d(0, 0, size),
+  };
+  static const int edges_raw[nedges][2] = {
+    { 0, 1 }, { 0, 2 }, { 0, 3 },
+  };
+  std::vector<std::pair<int, int> > edges;
+  for (int i = 0; i < nedges; ++i) {
+    edges.push_back(std::make_pair(edges_raw[i][0], edges_raw[i][1]));
+  }
+  const cv::Mat_<cv::Point3d> points(npoints, 1, points_raw);
+  DrawProjectedPoints(points, edges, frame_r, frame_t, color);
+  // TODO: Might be nice to draw little arrows at the axis tips.
+}
+
+void Localizer::DrawTagBox(const TagInfo& tag, const cv::Scalar& color) {
   static const int npoints = 8;
   static const int nedges = 12;
   const double s = tag.size;
   const double ss = 0.5*s;
-  cv::Point3d src[npoints] = {
+  // TODO: These raw arrays could probably be initialized directly as
+  // cv::Mat_ instances using the stream constructor (<<) syntax.
+  cv::Point3d points_raw[npoints] = {
     cv::Point3d(-ss, -ss, 0),
     cv::Point3d( ss, -ss, 0),
     cv::Point3d( ss,  ss, 0),
@@ -384,29 +425,41 @@ void Localizer::DrawTag(const TagInfo& tag, const cv::Scalar& color) {
     cv::Point3d( ss,  ss, s),
     cv::Point3d(-ss,  ss, s),
   };
-  static const int edges[nedges][2] = {
+  static const int edges_raw[nedges][2] = {
     { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 },
     { 4, 5 }, { 5, 6 }, { 6, 7 }, { 7, 4 },
     { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 }
   };
-  cv::Point2d dst[npoints];
+  std::vector<std::pair<int, int> > edges;
+  for (int i = 0; i < nedges; ++i) {
+    edges.push_back(std::make_pair(edges_raw[i][0], edges_raw[i][1]));
+  }
+  const cv::Mat_<cv::Point3d> points(npoints, 1, points_raw);
+  DrawProjectedPoints(points, edges, tag.raw_r, tag.raw_t, color);
+  // TODO: Optionally also draw the tag id with cv::putText()?
+}
+
+void Localizer::DrawProjectedPoints(
+    const cv::Mat_<cv::Point3d>& points,
+    const std::vector<std::pair<int, int> >& edges,
+    const cv::Mat_<double> r_vec,
+    const cv::Mat_<double> t_vec,
+    const cv::Scalar& color) {
   const double f = FLAGS_focal_length;
   double K[9] = {
     f, 0, optical_center_.x,
     0, f, optical_center_.y,
     0, 0, 1
   };
-  const cv::Mat_<cv::Point3d> srcmat(npoints, 1, src);
-  cv::Mat_<cv::Point2d> dstmat(npoints, 1, dst);
   const cv::Mat_<double> Kmat(3, 3, K);
+  cv::Mat_<cv::Point2d> proj_points(points.size());
   const cv::Mat_<double> distCoeffs = cv::Mat_<double>::zeros(4,1);
-  cv::projectPoints(srcmat, tag.raw_r, tag.raw_t, Kmat, distCoeffs, dstmat);
-  for (int j=0; j<nedges; ++j) {
+  cv::projectPoints(points, r_vec, t_vec, Kmat, distCoeffs, proj_points);
+  for (size_t i = 0; i < edges.size(); ++i) {
     cv::line(frame_,
-             dstmat(edges[j][0],0),
-             dstmat(edges[j][1],0),
-             color,
-             1, CV_AA);
+             proj_points(edges[i].first, 0),
+             proj_points(edges[i].second, 0),
+             color, 1, CV_AA);
   }
 }
 
