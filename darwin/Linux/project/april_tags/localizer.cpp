@@ -369,9 +369,14 @@ void Localizer::ShowVisualDisplay() {
       DrawTagBox(tag, obj_tag_color);
     }
   }
-  const double kGlobalFrameAxesSize = cv::norm(ref_system_.primary->ref_t);
-  DrawFrameAxes(ref_system_.origin->raw_r, ref_system_.origin->raw_t,
-                kGlobalFrameAxesSize, CV_RGB(0, 0, 0));
+  if (found_references_) {
+    const double kGlobalFrameAxesSize = cv::norm(ref_system_.primary->ref_t);
+    cv::Mat_<double> global_r_vec_inv;
+    cv::Rodrigues(global_rotation_.inv(), global_r_vec_inv);
+    DrawFrameAxes(global_r_vec_inv,
+                  TransformToCamera(ref_system_.origin->ref_t),
+                  kGlobalFrameAxesSize, CV_RGB(0, 0, 0));
+  }
   static const double kObjFrameAxesSize = 0.1;
   for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
        it != tagged_objects_.end(); ++it) {
