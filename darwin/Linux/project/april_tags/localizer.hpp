@@ -91,6 +91,7 @@ class Localizer {
   TagFamily tag_family_;
   TagDetector detector_;
   TagDetectionArray detections_;
+  bool found_references_;
   ReferenceSystem ref_system_;
   TagInfoMap ref_tags_;
   TagInfoMap obj_tags_;

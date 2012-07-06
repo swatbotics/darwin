@@ -80,6 +80,7 @@ Localizer::Localizer() :
     tag_family_(FLAGS_tag_family),
     detector_(tag_family_),
     detections_(),
+    found_references_(false),
     ref_system_(),
     ref_tags_(),
     obj_tags_(),
@@ -162,14 +163,16 @@ void Localizer::Run(DataCallbackFunc* data_callback) {
   while (true) {
     RunTagDetection();
     FindGlobalTransform();
-    if (FLAGS_show_localization_error) {
-      printf("Localization error: %f\n", GetLocalizationError());
+    if (found_references_) {
+      if (FLAGS_show_localization_error) {
+        printf("Localization error: %f\n", GetLocalizationError());
+      }
+      LocalizeObjects();
+      GenerateLocalizationData(data_callback);
     }
-    LocalizeObjects();
     if (FLAGS_show_display) {
       ShowVisualDisplay();
     }
-    GenerateLocalizationData(data_callback);
     double thistime = get_time_as_double();
     printf("FPS: %d\n", (int) (1 / (thistime - lasttime)));
     lasttime = thistime;
@@ -202,6 +205,7 @@ void Localizer::FindGlobalTransform() {
     std::cerr << "Cannot find full reference system for localization!\n";
     return;
   }
+  found_references_ = true;
   const TagInfo& origin_ref = *ref_system_.origin;
   const TagInfo& primary_ref = *ref_system_.primary;
   const TagInfo& secondary_ref = *ref_system_.secondary;
