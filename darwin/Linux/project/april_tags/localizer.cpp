@@ -306,12 +306,16 @@ void Localizer::ShowVisualDisplay() {
   for (TagInfoMap::iterator it = ref_tags_.begin();
        it != ref_tags_.end(); ++it) {
     TagInfo& tag = it->second;
-    DrawTag(tag, ref_tag_color);
+    if (tag.detected) {
+      DrawTag(tag, ref_tag_color);
+    }
   }
   for (TagInfoMap::iterator it = obj_tags_.begin();
        it != obj_tags_.end(); ++it) {
     TagInfo& tag = it->second;
-    DrawTag(tag, obj_tag_color);
+    if (tag.detected) {
+      DrawTag(tag, obj_tag_color);
+    }
   }
   cv::imshow(kWindowName, frame_);
   cv::waitKey(5);
