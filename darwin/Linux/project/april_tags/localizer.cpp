@@ -413,9 +413,11 @@ void Localizer::DrawTag(const TagInfo& tag, const cv::Scalar& color) {
 void Localizer::GenerateLocalizationData(DataCallbackFunc* data_callback) {
   if (data_callback != NULL) {
     std::stringstream sstream;
-    for (TagInfoMap::iterator it = obj_tags_.begin();
+    // TODO: At some point, stop returning data for bare tags?
+    for (TagInfoMap::const_iterator it = obj_tags_.begin();
          it != obj_tags_.end(); ++it) {
-      TagInfo& tag = it->second;
+      const TagInfo& tag = it->second;
+      // TODO: This should probably be tag.ToString() or something.
       sstream << tag.id << " @ "
               << tag.t[0][0] << " "
               << tag.t[1][0] << " "
@@ -423,6 +425,18 @@ void Localizer::GenerateLocalizationData(DataCallbackFunc* data_callback) {
               << tag.r[0][0] << " "
               << tag.r[1][0] << " "
               << tag.r[2][0] << "\n";
+    }
+    for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
+         it != tagged_objects_.end(); ++it) {
+      const TaggedObject& obj = it->second;
+      // TODO: This should probably be obj.ToString() or something.
+      sstream << obj.name << " @ "
+              << obj.t[0][0] << " "
+              << obj.t[1][0] << " "
+              << obj.t[2][0] << " * "
+              << obj.r[0][0] << " "
+              << obj.r[1][0] << " "
+              << obj.r[2][0] << "\n";
     }
     // Call the callback with the generated data.
     (*data_callback)(sstream.str());
