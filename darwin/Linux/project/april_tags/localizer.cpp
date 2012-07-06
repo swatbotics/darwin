@@ -60,6 +60,18 @@ void Localizer::TagInfo::DetectAt(const TagDetection& d) {
 }
 
 
+Localizer::TaggedObject::TaggedObject() :
+    name(""),
+    tag_ids() {
+  Reset();
+}
+
+void Localizer::TaggedObject::Reset() {
+  localized = false;
+  r = cv::Mat_<double>::zeros(3, 1);
+  t = cv::Mat_<double>::zeros(3, 1);
+}
+
 Localizer::Localizer() :
     config_(),
     vc_(),
@@ -71,6 +83,7 @@ Localizer::Localizer() :
     ref_system_(),
     ref_tags_(),
     obj_tags_(),
+    tagged_objects_(),
     global_translation_(3, 1),
     global_rotation_(3, 3)
 {
@@ -104,6 +117,27 @@ void Localizer::InitializeConfiguration() {
     ref_system_.origin = &ref_tags_[ref_config["origin"]];
     ref_system_.primary = &ref_tags_[ref_config["primary"]];
     ref_system_.secondary = &ref_tags_[ref_config["secondary"]];
+
+    const libconfig::Setting& obj_configs = config_.lookup("objects");
+    for (int i = 0; i < obj_configs.getLength(); ++i) {
+      const libconfig::Setting& obj_config = obj_configs[i];
+      TaggedObject& obj = tagged_objects_[obj_config["name"]];
+      // Cast needed to disambiguate between std::string constructors.
+      obj.name = (const char *) obj_config["name"];
+      for (int j = 0; j < obj_config.lookup("tags").getLength(); ++j) {
+        const libconfig::Setting& tag_config = obj_config["tags"][j];
+        TagInfo& tag = obj_tags_[tag_config["id"]];
+        tag.id = tag_config["id"];
+        tag.size = tag_config["size"];
+        tag.ref_t[0][0] = tag_config["x"];
+        tag.ref_t[1][0] = tag_config["y"];
+        tag.ref_t[2][0] = tag_config["z"];
+        tag.ref_r[0][0] = tag_config["r_x"];
+        tag.ref_r[1][0] = tag_config["r_y"];
+        tag.ref_r[2][0] = tag_config["r_z"];
+        obj.tag_ids.insert(tag.id);
+      }
+    }
   } catch (libconfig::SettingException& e) {
     std::cerr << e.what() << ": Error with setting '" << e.getPath() << "'.\n";
     exit(1);
@@ -139,22 +173,11 @@ void Localizer::Run(DataCallbackFunc* data_callback) {
     double thistime = get_time_as_double();
     printf("FPS: %d\n", (int) (1 / (thistime - lasttime)));
     lasttime = thistime;
-  }
-}
-
-void Localizer::ResetTagDetections() {
-  for (TagInfoMap::iterator it = ref_tags_.begin();
-       it != ref_tags_.end(); ++it) {
-      it->second.Reset();
-  }
-  for (TagInfoMap::iterator it = obj_tags_.begin();
-       it != obj_tags_.end(); ++it) {
-      it->second.Reset();
+    Reset();
   }
 }
 
 void Localizer::RunTagDetection() {
-  ResetTagDetections();
   vc_ >> frame_;
   if (frame_.empty()) {
     std::cerr << "Got empty frame!\n";
@@ -284,10 +307,45 @@ void Localizer::LocalizeObjects() {
     tag.t = TransformToGlobal(tag.raw_t);
     if (DEBUG) std::cout << "raw_r = \n" << raw_r_mat << "\n";
     if (DEBUG) std::cout << "raw_t = " << tag.raw_t << "\n";
-    printf("Object (id #%d) at (%.2f, %.2f, %.2f), x -> (%.2f, %.2f, %.2f)\n",
+    printf("Tag (id #%d) at (%.2f, %.2f, %.2f), x -> (%.2f, %.2f, %.2f)\n",
            tag.id, tag.t[0][0], tag.t[1][0], tag.t[2][0],
            r_mat[0][0], r_mat[1][0], r_mat[2][0]);
   }
+  for (TaggedObjectMap::iterator it = tagged_objects_.begin();
+       it != tagged_objects_.end(); ++it) {
+    TaggedObject& obj = it->second;
+    if (LocalizeObjectFromTags(obj)) {
+      cv::Mat_<double> r_mat;
+      cv::Rodrigues(obj.r, r_mat);
+      printf("Object (%s) at (%.2f, %.2f, %.2f), x -> (%.2f, %.2f, %.2f)\n",
+             obj.name.c_str(), obj.t[0][0], obj.t[1][0], obj.t[2][0],
+             r_mat[0][0], r_mat[1][0], r_mat[2][0]);
+    }
+  }
+}
+
+bool Localizer::LocalizeObjectFromTags(TaggedObject& obj) {
+  // For now, just use the first detected tag - average would be better.
+  int id = -1;
+  for (std::set<int>::const_iterator it = obj.tag_ids.begin();
+       it != obj.tag_ids.end(); ++it) {
+    id = *it;
+    if (obj_tags_.count(id) > 0 && obj_tags_[id].detected) break;
+  }
+  if (id == -1) return false;
+  // TODO: This stuff is a mess, calls cv::Rodrigues three times. Need to
+  // either just store full rotation matrices or implement wrappers.
+  const TagInfo& tag = obj_tags_[id];
+  cv::Mat_<double> tag_ref_r_mat, tag_r_mat, obj_r_mat;
+  cv::Rodrigues(tag.ref_r, tag_ref_r_mat);
+  cv::Mat_<double> obj_r_in_tag_frame = tag_ref_r_mat.inv();
+  cv::Mat_<double> obj_origin_in_tag_frame = tag_ref_r_mat.inv() * -tag.ref_t;
+  cv::Rodrigues(tag.r, tag_r_mat);
+  obj_r_mat = tag_r_mat * obj_r_in_tag_frame;
+  cv::Rodrigues(obj_r_mat, obj.r);
+  obj.t = tag_r_mat * obj_origin_in_tag_frame + tag.t;
+  obj.localized = true;
+  return true;
 }
 
 void Localizer::ShowVisualDisplay() {
@@ -368,5 +426,20 @@ void Localizer::GenerateLocalizationData(DataCallbackFunc* data_callback) {
     }
     // Call the callback with the generated data.
     (*data_callback)(sstream.str());
+  }
+}
+
+void Localizer::Reset() {
+  for (TagInfoMap::iterator it = ref_tags_.begin();
+       it != ref_tags_.end(); ++it) {
+    it->second.Reset();
+  }
+  for (TagInfoMap::iterator it = obj_tags_.begin();
+       it != obj_tags_.end(); ++it) {
+    it->second.Reset();
+  }
+  for (TaggedObjectMap::iterator it = tagged_objects_.begin();
+       it != tagged_objects_.end(); ++it) {
+    it->second.Reset();
   }
 }
