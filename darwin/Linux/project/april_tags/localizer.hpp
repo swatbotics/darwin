@@ -21,7 +21,6 @@ class Localizer {
  private:
   struct TagInfo {
     TagInfo();
-    TagInfo(const TagDetection& d, double tag_size);
     void Reset();
     void DetectAt(const TagDetection& d);
     int id;
@@ -42,7 +41,6 @@ class Localizer {
     TagInfo* secondary;
   };
 
-  static const double kObjectTagSize;
   static const char* kWindowName;
 
   void InitializeConfiguration();

@@ -17,7 +17,7 @@ DEFINE_double(focal_length, 500,
               "Focal length of the camera represented by the video device.");
 DEFINE_string(tag_family, "Tag36h11",
               "Tag family to use for detections.");
-DEFINE_double(obj_tag_size, 0.075, "Size of object tags.");
+DEFINE_double(default_tag_size, 0.075, "Size of unassociated tags.");
 DEFINE_int32(frame_width, 640, "Desired video frame width.");
 DEFINE_int32(frame_height, 480, "Desired video frame height.");
 DEFINE_bool(rigid_transform, true,
@@ -30,22 +30,15 @@ DEFINE_string(config_file, "./localizer_env.cfg",
 
 #define DEBUG false
 
-const double Localizer::kObjectTagSize = FLAGS_obj_tag_size;
 const char* Localizer::kWindowName = "Localization Server";
 
 Localizer::TagInfo::TagInfo() :
     id(0),
     detected(false),
-    size(0),
+    size(FLAGS_default_tag_size),
     ref_r(cv::Mat_<double>::zeros(3, 1)),
     ref_t(cv::Mat_<double>::zeros(3, 1)) {
   Reset();
-}
-
-Localizer::TagInfo::TagInfo(const TagDetection& d, double tag_size) {
-  id = d.id;
-  size = tag_size;
-  DetectAt(d);
 }
 
 void Localizer::TagInfo::Reset() {
@@ -58,11 +51,8 @@ void Localizer::TagInfo::Reset() {
 }
 
 void Localizer::TagInfo::DetectAt(const TagDetection& d) {
-  if (size == 0) {
-    std::cerr << "Can't detect tag without specifying size!\n";
-    exit(1);
-  }
   Reset();
+  id = d.id;
   detected = true;
   center = d.cxy;
   const double f = FLAGS_focal_length;
@@ -177,7 +167,7 @@ void Localizer::RunTagDetection() {
     if (ref_tags_.count(d.id) > 0) {
       ref_tags_[d.id].DetectAt(d);
     } else {
-      obj_tags_[d.id] = TagInfo(d, kObjectTagSize);
+      obj_tags_[d.id].DetectAt(d);
     }
   }
 }
