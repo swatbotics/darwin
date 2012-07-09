@@ -50,6 +50,7 @@ class Localizer {
     std::set<int> tag_ids;
     bool localized;
     int primary_tag_id;
+    cv::Point3d label_loc;
     cv::Mat_<double> r;  // Rotation vector
     cv::Mat_<double> t;
   };

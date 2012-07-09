@@ -29,6 +29,8 @@ DEFINE_bool(video_background, true,
             "Use video as background of visual display.");
 DEFINE_bool(show_tag_labels, true,
             "Label tags with IDs in the visual display.");
+DEFINE_bool(show_object_labels, true,
+            "Label objects with their names in the visual display.");
 DEFINE_string(config_file, "./localizer_env.cfg",
               "Configuration file for localization environment info.");
 
@@ -68,7 +70,8 @@ void Localizer::TagInfo::DetectAt(const TagDetection& d) {
 
 Localizer::TaggedObject::TaggedObject() :
     name(""),
-    tag_ids() {
+    tag_ids(),
+    label_loc(0, 0, 0) {
   Reset();
 }
 
@@ -145,6 +148,8 @@ void Localizer::InitializeConfiguration() {
         tag.ref_r[2][0] = tag_config["r_z"];
         obj.tag_ids.insert(tag.id);
       }
+      const libconfig::Setting& label = obj_config["label_loc"];
+      obj.label_loc = cv::Point3d(label["x"], label["y"], label["z"]);
     }
   } catch (libconfig::SettingException& e) {
     std::cerr << e.what() << ": Error with setting '" << e.getPath() << "'.\n";
@@ -413,6 +418,10 @@ void Localizer::ShowVisualDisplay() {
       cv::Rodrigues(cam_r_mat, cam_r_vec);
       cv::Mat_<double> cam_t = TransformToCamera(obj.t);
       DrawFrameAxes(cam_r_vec, cam_t, kObjFrameAxesSize, CV_RGB(0, 255, 0));
+      if (FLAGS_show_object_labels) {
+        DrawProjectedText(obj.name, obj.label_loc, cam_r_vec, cam_t,
+                          CV_RGB(0, 255, 0));
+      }
     }
   }
   cv::imshow(kWindowName, display_);
