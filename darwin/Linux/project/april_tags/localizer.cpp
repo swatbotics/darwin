@@ -27,6 +27,8 @@ DEFINE_bool(show_localization_error, false,
 DEFINE_bool(show_display, false, "Show a visual display of detections.");
 DEFINE_bool(video_background, true,
             "Use video as background of visual display.");
+DEFINE_bool(show_tag_labels, true,
+            "Label tags with IDs in the visual display.");
 DEFINE_string(config_file, "./localizer_env.cfg",
               "Configuration file for localization environment info.");
 
@@ -468,7 +470,12 @@ void Localizer::DrawTagBox(const TagInfo& tag, const cv::Scalar& color) {
   }
   const cv::Mat_<cv::Point3d> points(npoints, 1, points_raw);
   DrawProjectedPoints(points, edges, tag.raw_r, tag.raw_t, color);
-  // TODO: Optionally also draw the tag id with cv::putText()?
+  if (FLAGS_show_tag_labels) {
+    std::stringstream sstream;
+    sstream << "#" << tag.id;
+    const cv::Point3d text_point(0, 0, s / 2);
+    DrawProjectedText(sstream.str(), text_point, tag.raw_r, tag.raw_t, color);
+  }
 }
 
 void Localizer::DrawProjectedPoints(
@@ -493,6 +500,35 @@ void Localizer::DrawProjectedPoints(
              proj_points(edges[i].second, 0),
              color, 1, CV_AA);
   }
+}
+
+void Localizer::DrawProjectedText(const std::string& text,
+                                  const cv::Point3d& point,
+                                  const cv::Mat_<double>& r_vec,
+                                  const cv::Mat_<double>& t_vec,
+                                  const cv::Scalar& color) {
+  cv::Mat_<cv::Point3d> points(1, 1, point);
+  // TODO: This definition of the K matrix repeats code in DrawProjectedPoints,
+  // above - should refactor projection part out.
+  const double f = FLAGS_focal_length;
+  double K[9] = {
+    f, 0, optical_center_.x,
+    0, f, optical_center_.y,
+    0, 0, 1
+  };
+  const cv::Mat_<double> Kmat(3, 3, K);
+  cv::Mat_<cv::Point2d> proj_points(points.size());
+  const cv::Mat_<double> distCoeffs = cv::Mat_<double>::zeros(4,1);
+  cv::projectPoints(points, r_vec, t_vec, Kmat, distCoeffs, proj_points);
+  const int font_face = cv::FONT_HERSHEY_DUPLEX;
+  const double font_scale = 0.75;
+  const int thickness = 1;
+  cv::Size text_size = cv::getTextSize(text, font_face, font_scale,
+                                       thickness, NULL);
+  cv::Point2d text_center(-text_size.width * 0.5, text_size.height * 0.5);
+  cv::Point2d centered_point = proj_points(0, 0) + text_center;
+  cv::putText(display_, text, centered_point, font_face,
+              font_scale, color, thickness, CV_AA);
 }
 
 void Localizer::GenerateLocalizationData(DataCallbackFunc* data_callback) {

@@ -83,6 +83,11 @@ class Localizer {
                            const cv::Mat_<double>& r_vec,
                            const cv::Mat_<double>& t_vec,
                            const cv::Scalar& color);
+  void DrawProjectedText(const std::string& text,
+                         const cv::Point3d& point,
+                         const cv::Mat_<double>& r_vec,
+                         const cv::Mat_<double>& t_vec,
+                         const cv::Scalar& color);
   void GenerateLocalizationData(DataCallbackFunc* data_callback);
   void Reset();
 
