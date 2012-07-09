@@ -80,8 +80,8 @@ class Localizer {
   void DrawTagBox(const TagInfo& tag, const cv::Scalar& color);
   void DrawProjectedPoints(const cv::Mat_<cv::Point3d>& points,
                            const std::vector<std::pair<int, int> >& edges,
-                           const cv::Mat_<double> r_vec,
-                           const cv::Mat_<double> t_vec,
+                           const cv::Mat_<double>& r_vec,
+                           const cv::Mat_<double>& t_vec,
                            const cv::Scalar& color);
   void GenerateLocalizationData(DataCallbackFunc* data_callback);
   void Reset();
