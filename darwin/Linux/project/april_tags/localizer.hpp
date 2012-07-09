@@ -28,6 +28,7 @@ class Localizer {
     int id;
     bool detected;
     double size;
+    double perimeter;
     cv::Point2d center;
     cv::Mat_<double> ref_r;  // Rotation vector
     cv::Mat_<double> ref_t;
@@ -48,6 +49,7 @@ class Localizer {
     std::string name;
     std::set<int> tag_ids;
     bool localized;
+    int primary_tag_id;
     cv::Mat_<double> r;  // Rotation vector
     cv::Mat_<double> t;
   };

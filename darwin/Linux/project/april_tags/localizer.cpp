@@ -45,6 +45,7 @@ Localizer::TagInfo::TagInfo() :
 
 void Localizer::TagInfo::Reset() {
   detected = false;
+  perimeter = 0.0;
   center = cv::Point2d(0, 0);
   raw_r = cv::Mat_<double>::zeros(3, 1);
   raw_t = cv::Mat_<double>::zeros(3, 1);
@@ -56,6 +57,7 @@ void Localizer::TagInfo::DetectAt(const TagDetection& d) {
   Reset();
   id = d.id;
   detected = true;
+  perimeter = d.observedPerimeter;
   center = d.cxy;
   const double f = FLAGS_focal_length;
   CameraUtil::homographyToPoseCV(f, f, size, d.homography, raw_r, raw_t);
@@ -70,6 +72,7 @@ Localizer::TaggedObject::TaggedObject() :
 
 void Localizer::TaggedObject::Reset() {
   localized = false;
+  primary_tag_id = -1;
   r = cv::Mat_<double>::zeros(3, 1);
   t = cv::Mat_<double>::zeros(3, 1);
 }
@@ -332,18 +335,23 @@ void Localizer::LocalizeObjects() {
 }
 
 bool Localizer::LocalizeObjectFromTags(TaggedObject& obj) {
-  // For now, just use the first detected tag - average would be better.
-  int id = -1;
+  // Use the object-identifying tag with the largest visual perimeter.
+  int best_id = -1;
+  double max_perim = 0.0;
   for (std::set<int>::const_iterator it = obj.tag_ids.begin();
        it != obj.tag_ids.end(); ++it) {
-    id = *it;
-    if (obj_tags_.count(id) > 0 && obj_tags_[id].detected) break;
-    id = -1;
+    int id = *it;
+    if (obj_tags_.count(id) > 0 && obj_tags_[id].detected
+        && obj_tags_[id].perimeter > max_perim) {
+      best_id = id;
+      max_perim = obj_tags_[id].perimeter;
+    }
   }
-  if (id == -1) return false;
+  if (best_id == -1) return false;
+  obj.primary_tag_id = best_id;
   // TODO: This stuff is a mess, calls cv::Rodrigues three times. Need to
   // either just store full rotation matrices or implement wrappers.
-  const TagInfo& tag = obj_tags_[id];
+  const TagInfo& tag = obj_tags_[best_id];
   cv::Mat_<double> tag_ref_r_mat, tag_r_mat, obj_r_mat;
   cv::Rodrigues(tag.ref_r, tag_ref_r_mat);
   cv::Mat_<double> obj_r_in_tag_frame = tag_ref_r_mat.inv();
@@ -364,7 +372,7 @@ void Localizer::ShowVisualDisplay() {
   }
   const cv::Scalar& ref_tag_color = (FLAGS_video_background ?
                                      CV_RGB(0, 0, 0) : CV_RGB(255, 255, 255));
-  const cv::Scalar& obj_tag_color = CV_RGB(0, 255, 0);
+  const cv::Scalar& obj_tag_color = CV_RGB(0, 127, 0);
   for (TagInfoMap::const_iterator it = ref_tags_.begin();
        it != ref_tags_.end(); ++it) {
     const TagInfo& tag = it->second;
@@ -392,6 +400,11 @@ void Localizer::ShowVisualDisplay() {
        it != tagged_objects_.end(); ++it) {
     const TaggedObject& obj = it->second;
     if (obj.localized) {
+      // For now, just draw this box over the standard object tag box.
+      // TODO: add a "color" field to TagInfo? Or "type"? To control display
+      // so we don't have to draw two boxes.
+      const cv::Scalar& primary_tag_color = CV_RGB(0, 255, 0);
+      DrawTagBox(obj_tags_[obj.primary_tag_id], primary_tag_color);
       cv::Mat_<double> obj_r_mat, cam_r_mat, cam_r_vec;
       cv::Rodrigues(obj.r, obj_r_mat);
       cam_r_mat = global_rotation_.inv() * obj_r_mat;
