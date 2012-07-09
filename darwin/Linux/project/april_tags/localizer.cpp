@@ -338,6 +338,7 @@ bool Localizer::LocalizeObjectFromTags(TaggedObject& obj) {
        it != obj.tag_ids.end(); ++it) {
     id = *it;
     if (obj_tags_.count(id) > 0 && obj_tags_[id].detected) break;
+    id = -1;
   }
   if (id == -1) return false;
   // TODO: This stuff is a mess, calls cv::Rodrigues three times. Need to
