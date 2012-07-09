@@ -489,6 +489,7 @@ void Localizer::GenerateLocalizationData(DataCallbackFunc* data_callback) {
     for (TagInfoMap::const_iterator it = obj_tags_.begin();
          it != obj_tags_.end(); ++it) {
       const TagInfo& tag = it->second;
+      if (!tag.detected) continue;
       // TODO: This should probably be tag.ToString() or something.
       sstream << tag.id << " @ "
               << tag.t[0][0] << " "
@@ -501,6 +502,7 @@ void Localizer::GenerateLocalizationData(DataCallbackFunc* data_callback) {
     for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
          it != tagged_objects_.end(); ++it) {
       const TaggedObject& obj = it->second;
+      if (!obj.localized) continue;
       // TODO: This should probably be obj.ToString() or something.
       sstream << obj.name << " @ "
               << obj.t[0][0] << " "
