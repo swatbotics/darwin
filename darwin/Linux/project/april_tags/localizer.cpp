@@ -67,6 +67,14 @@ void Localizer::TagInfo::DetectAt(const TagDetection& d) {
   CameraUtil::homographyToPoseCV(f, f, size, d.homography, raw_r, raw_t);
 }
 
+std::string Localizer::TagInfo::ToString() const {
+  std::stringstream sstream;
+  sstream << id << " @ "
+          << t[0][0] << " " << t[1][0] << " " << t[2][0] << " * "
+          << r[0][0] << " " << r[1][0] << " " << r[2][0];
+  return sstream.str();
+}
+
 
 Localizer::TaggedObject::TaggedObject() :
     name(""),
@@ -81,6 +89,15 @@ void Localizer::TaggedObject::Reset() {
   r = cv::Mat_<double>::zeros(3, 1);
   t = cv::Mat_<double>::zeros(3, 1);
 }
+
+std::string Localizer::TaggedObject::ToString() const {
+  std::stringstream sstream;
+  sstream << name << " @ "
+          << t[0][0] << " " << t[1][0] << " " << t[2][0] << " * "
+          << r[0][0] << " " << r[1][0] << " " << r[2][0];
+  return sstream.str();
+}
+
 
 Localizer::Localizer() :
     config_(),
@@ -547,28 +564,12 @@ void Localizer::GenerateLocalizationData(DataCallbackFunc* data_callback) {
     for (TagInfoMap::const_iterator it = obj_tags_.begin();
          it != obj_tags_.end(); ++it) {
       const TagInfo& tag = it->second;
-      if (!tag.detected) continue;
-      // TODO: This should probably be tag.ToString() or something.
-      sstream << tag.id << " @ "
-              << tag.t[0][0] << " "
-              << tag.t[1][0] << " "
-              << tag.t[2][0] << " * "
-              << tag.r[0][0] << " "
-              << tag.r[1][0] << " "
-              << tag.r[2][0] << "\n";
+      if (tag.detected) sstream << tag.ToString() << "\n";
     }
     for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
          it != tagged_objects_.end(); ++it) {
       const TaggedObject& obj = it->second;
-      if (!obj.localized) continue;
-      // TODO: This should probably be obj.ToString() or something.
-      sstream << obj.name << " @ "
-              << obj.t[0][0] << " "
-              << obj.t[1][0] << " "
-              << obj.t[2][0] << " * "
-              << obj.r[0][0] << " "
-              << obj.r[1][0] << " "
-              << obj.r[2][0] << "\n";
+      if (obj.localized) sstream << obj.ToString() << "\n";
     }
     // Call the callback with the generated data.
     (*data_callback)(sstream.str());

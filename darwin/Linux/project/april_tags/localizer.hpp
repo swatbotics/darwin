@@ -25,6 +25,7 @@ class Localizer {
     TagInfo();
     void Reset();
     void DetectAt(const TagDetection& d);
+    std::string ToString() const;
     int id;
     bool detected;
     double size;
@@ -46,6 +47,7 @@ class Localizer {
   struct TaggedObject {
     TaggedObject();
     void Reset();
+    std::string ToString() const;
     std::string name;
     std::set<int> tag_ids;
     bool localized;
