@@ -306,6 +306,7 @@ void Localizer::LocalizeObjects() {
   for (TagInfoMap::iterator it = obj_tags_.begin();
        it != obj_tags_.end(); ++it) {
     TagInfo& tag = it->second;
+    if (!tag.detected) continue;
     cv::Mat_<double> raw_r_mat, r_mat;
     cv::Rodrigues(tag.raw_r, raw_r_mat);
     r_mat = global_rotation_ * raw_r_mat;
