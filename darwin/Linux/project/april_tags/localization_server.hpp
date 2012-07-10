@@ -30,14 +30,14 @@ class LocalizationServer {
     LocalizationServerCallback(LocalizationServer* obj) : obj_(obj) {}
     ~LocalizationServerCallback() {}
     void operator() (const std::string& data) {
-      obj_->DataRetrievalCallback(data);
+      obj_->SetData(data);
     }
     LocalizationServer* obj_;
   };
 
   static const int kDefaultServerPort;
 
-  void DataRetrievalCallback(const std::string& data);
+  void SetData(const std::string& data);
   void ReceiveRequest();
   void HandleRequest(const asio::error_code& error,
                      std::size_t /*bytes_transferred*/);

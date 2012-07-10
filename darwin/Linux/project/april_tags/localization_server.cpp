@@ -28,7 +28,7 @@ LocalizationServer::LocalizationServer(int server_port=kDefaultServerPort) :
 {
 }
 
-void LocalizationServer::DataRetrievalCallback(const std::string& data) {
+void LocalizationServer::SetData(const std::string& data) {
   {
     boost::lock_guard<boost::mutex> lock(data_mutex_);
     localization_data_ = data;
