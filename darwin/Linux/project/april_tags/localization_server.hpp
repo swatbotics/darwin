@@ -22,6 +22,8 @@ class LocalizationServer {
   LocalizationServer(int server_port);
   ~LocalizationServer() {}
   void Run();
+  void RunLocalizer();
+  void Stop();
 
  private:
   struct LocalizationServerCallback : Localizer::DataCallbackFunc {
@@ -51,6 +53,7 @@ class LocalizationServer {
   udp::socket socket_;
   udp::endpoint remote_endpoint_;
   boost::array<int, 1> recv_buffer_;
+  asio::thread io_thread_;
 };
 
 #endif  // LOCALIZATION_SERVER_HPP

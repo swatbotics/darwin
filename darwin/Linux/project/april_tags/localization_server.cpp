@@ -76,8 +76,15 @@ void LocalizationServer::Run() {
   if (DEBUG) std::cout << "Receiving initial request asynchronously...\n";
   ReceiveRequest();
   if (DEBUG) std::cout << "Launching IO processing thread...\n";
-  asio::thread t(boost::bind(&asio::io_service::run, &io_service_));
+  io_thread_ = asio::thread(boost::bind(&asio::io_service::run, &io_service_));
+}
+
+void LocalizationServer::RunLocalizer() {
   if (DEBUG) std::cout << "Running localization in main thread...\n";
   localizer_.Run(&callback_);
-  t.join();
+}
+
+void LocalizationServer::Stop() {
+  io_thread_.join();
+  socket_.close();
 }
