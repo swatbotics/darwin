@@ -1,4 +1,4 @@
-#include "localization_client.hpp"
+#include "status_client.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -9,15 +9,15 @@
 
 namespace asio = boost::asio;
 
-const int LocalizationClient::kDefaultServerPort = 9000;
-const int LocalizationClient::kRecvBufferSize = 2048;
+const int StatusClient::kDefaultServerPort = 9000;
+const int StatusClient::kRecvBufferSize = 2048;
 
-LocalizationClient::LocalizationClient(std::string server_name,
-                                       int server_port=kDefaultServerPort) :
+StatusClient::StatusClient(std::string server_name,
+                           int server_port=kDefaultServerPort) :
     server_name_(server_name),
     server_port_(server_port),
     data_mutex_(),
-    localization_data_(),
+    data_(),
     io_service_(),
     socket_(io_service_),
     remote_endpoint_(),
@@ -27,42 +27,42 @@ LocalizationClient::LocalizationClient(std::string server_name,
 {
 }
 
-void LocalizationClient::SendRequest() {
+void StatusClient::SendRequest() {
   if (DEBUG) std::cout << "Sending request!\n";
   socket_.async_send_to(
       asio::buffer(send_buffer_), remote_endpoint_,
-      boost::bind(&LocalizationClient::HandleRequest, this,
+      boost::bind(&StatusClient::HandleRequest, this,
                   asio::placeholders::error,
                   asio::placeholders::bytes_transferred));
 }
 
-void LocalizationClient::HandleRequest(const asio::error_code& error,
-                                       std::size_t /*bytes_transferred*/) {
+void StatusClient::HandleRequest(const asio::error_code& error,
+                                 std::size_t /*bytes_transferred*/) {
   if (DEBUG) std::cout << "Handling request!\n";
   if (!error) {
     socket_.async_receive_from(
         asio::buffer(recv_buffer_), remote_endpoint_,
-        boost::bind(&LocalizationClient::HandleResponse, this,
+        boost::bind(&StatusClient::HandleResponse, this,
                     asio::placeholders::error,
                     asio::placeholders::bytes_transferred));
   }
 }
 
-void LocalizationClient::HandleResponse(const asio::error_code& error,
-                                        std::size_t bytes_transferred) {
+void StatusClient::HandleResponse(const asio::error_code& error,
+                                  std::size_t bytes_transferred) {
   if (DEBUG) std::cout << "Handling response!\n";
   if (!error && bytes_transferred > 0) {
     {
       boost::lock_guard<boost::mutex> lock(data_mutex_);
-      localization_data_.assign(recv_buffer_.begin(),
-                                recv_buffer_.begin() + bytes_transferred);
+      data_.assign(recv_buffer_.begin(),
+                   recv_buffer_.begin() + bytes_transferred);
     }
   }
   SendRequest();
 }
 
-void LocalizationClient::Run() {
-  if (DEBUG) std::cout << "Resolving localization server name.\n";
+void StatusClient::Run() {
+  if (DEBUG) std::cout << "Resolving status server name.\n";
   udp::resolver resolver(io_service_);
   std::stringstream port_string;
   port_string << server_port_;  // Convert int to string.
@@ -78,14 +78,14 @@ void LocalizationClient::Run() {
   io_thread_ = asio::thread(boost::bind(&asio::io_service::run, &io_service_));
 }
 
-void LocalizationClient::Stop() {
+void StatusClient::Stop() {
   io_thread_.join();
   socket_.close();
 }
 
-std::string LocalizationClient::GetData() {
+std::string StatusClient::GetData() {
   {
     boost::lock_guard<boost::mutex> lock(data_mutex_);
-    return localization_data_;
+    return data_;
   }
 }

@@ -26,9 +26,8 @@ if (Boost_FOUND)
   target_link_libraries(localization_server ${Boost_LIBRARIES}
     apriltagcpp ${OPENCV_LIBRARIES} gflags config++)
 
-  add_executable(localization_client localization_client.cpp
-    localization_client_main.cpp)
-  target_link_libraries(localization_client ${Boost_LIBRARIES} gflags)
+  add_executable(status_client status_client.cpp status_client_main.cpp)
+  target_link_libraries(status_client ${Boost_LIBRARIES} gflags)
 else (Boost_FOUND)
   message("Cannot build localization binaries - need boost!")
 endif (Boost_FOUND)

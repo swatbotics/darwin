@@ -1,5 +1,5 @@
-#ifndef LOCALIZATION_CLIENT_HPP
-#define LOCALIZATION_CLIENT_HPP
+#ifndef STATUS_CLIENT_HPP
+#define STATUS_CLIENT_HPP
 
 #include <string>
 
@@ -16,10 +16,10 @@ typedef boost::thread thread;
 namespace asio = boost::asio;
 using asio::ip::udp;
 
-class LocalizationClient {
+class StatusClient {
  public:
-  LocalizationClient(std::string server_name, int server_port);
-  ~LocalizationClient() {}
+  StatusClient(std::string server_name, int server_port);
+  ~StatusClient() {}
   void Run();
   void Stop();
   std::string GetData();
@@ -37,7 +37,7 @@ class LocalizationClient {
   std::string server_name_;
   int server_port_;
   boost::mutex data_mutex_;
-  std::string localization_data_;
+  std::string data_;
   asio::io_service io_service_;
   udp::socket socket_;
   udp::endpoint remote_endpoint_;
@@ -46,4 +46,4 @@ class LocalizationClient {
   asio::thread io_thread_;
 };
 
-#endif  // LOCALIZATION_CLIENT_HPP
+#endif  // STATUS_CLIENT_HPP
