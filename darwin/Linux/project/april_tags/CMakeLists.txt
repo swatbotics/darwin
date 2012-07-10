@@ -5,6 +5,7 @@ set(DARWIN_APRILTAG_FILES util.cpp)
 include_directories(${OPENCV_INCLUDE_DIRS})
 include_directories(${APRILTAG_INCLUDE_DIRS})
 include_directories(${GFLAGS_INCLUDE_DIRS})
+include_directories(${LIBCONFIG_INCLUDE_DIRS})
 
 add_executable(run_explorer run_explorer.cpp explorer.cpp
   ${DARWIN_APRILTAG_FILES})
@@ -20,9 +21,10 @@ find_package(Boost COMPONENTS system thread)
 if (Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIR})
 
-  add_executable(localization_server localization_server.cpp util.cpp)
+  add_executable(localization_server localization_server.cpp localizer.cpp
+    util.cpp)
   target_link_libraries(localization_server ${Boost_LIBRARIES}
-    apriltagcpp ${OPENCV_LIBRARIES} gflags)
+    apriltagcpp ${OPENCV_LIBRARIES} gflags config++)
 
   add_executable(localization_client localization_client.cpp)
   target_link_libraries(localization_client ${Boost_LIBRARIES}

@@ -199,7 +199,7 @@ int main(int argc, char** argv) {
       std::cout << "wrote frame.png\n";
     } else if (k % 256 == 'p') {
       cvPose = !cvPose;
-    } else if (k % 256 == 27) {
+    } else if (k % 256 == 27 /* ESC */) {
       break;
     }
 

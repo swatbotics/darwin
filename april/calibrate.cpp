@@ -1,12 +1,16 @@
 #include <iostream>
 #include <string>
 #include <ctype.h>
+#include <gflags/gflags.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <sys/stat.h>
 #include "Geometry.h"
 #include <stdio.h>
+
+DEFINE_int32(frame_width, 640, "Desired video frame width.");
+DEFINE_int32(frame_height, 480, "Desired video frame height.");
 
 typedef std::vector<cv::Point2f> CvPoint2fArray;
 typedef std::vector<cv::Point3f> CvPoint3fArray;
@@ -76,6 +80,10 @@ bool detectCorners(const cv::Mat& orig,
 }
 
 int main(int argc, char** argv) {
+  std::string usage;
+  usage += std::string("Usage: ") + argv[0] + std::string(" [OPTIONS]");
+  gflags::SetUsageMessage(usage);
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   /*
   cv::Size pattern_size(7,7);
@@ -133,6 +141,11 @@ int main(int argc, char** argv) {
           }
           
         }
+        capture.set(CV_CAP_PROP_FRAME_WIDTH, FLAGS_frame_width);
+        capture.set(CV_CAP_PROP_FRAME_HEIGHT, FLAGS_frame_height);
+        std::cout << "Camera resolution: "
+                  << capture.get(CV_CAP_PROP_FRAME_WIDTH) << "x"
+                  << capture.get(CV_CAP_PROP_FRAME_HEIGHT) << "\n";
 
       }
 
