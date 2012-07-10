@@ -21,8 +21,8 @@ find_package(Boost COMPONENTS system thread)
 if (Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIR})
 
-  add_executable(localization_server localization_server.cpp localizer.cpp
-    util.cpp)
+  add_executable(localization_server localization_server.cpp
+    localization_server_main.cpp localizer.cpp util.cpp)
   target_link_libraries(localization_server ${Boost_LIBRARIES}
     apriltagcpp ${OPENCV_LIBRARIES} gflags config++)
 

@@ -9,14 +9,14 @@
 
 #include "util.hpp"
 
-DEFINE_int32(server_port, 9000,
-             "Port on which to run UDP localization service.");
-
 #define DEBUG false
 
 namespace asio = boost::asio;
 
-LocalizationServer::LocalizationServer() :
+const int LocalizationServer::kDefaultServerPort = 9000;
+
+LocalizationServer::LocalizationServer(int server_port=kDefaultServerPort) :
+    server_port_(server_port),
     localizer_(),
     callback_(this),
     data_mutex_(),
@@ -71,8 +71,8 @@ void LocalizationServer::Run() {
   if (DEBUG) std::cout << "Opening UDP socket.\n";
   socket_.open(udp::v4());
   if (DEBUG) std::cout << "Binding UDP socket to port "
-                       << FLAGS_server_port << ".\n";
-  socket_.bind(udp::endpoint(udp::v4(), FLAGS_server_port));
+                       << server_port_ << ".\n";
+  socket_.bind(udp::endpoint(udp::v4(), server_port_));
   if (DEBUG) std::cout << "Receiving initial request asynchronously...\n";
   ReceiveRequest();
   if (DEBUG) std::cout << "Launching IO processing thread...\n";
@@ -80,14 +80,4 @@ void LocalizationServer::Run() {
   if (DEBUG) std::cout << "Running localization in main thread...\n";
   localizer_.Run(&callback_);
   t.join();
-}
-
-int main(int argc, char* argv[]) {
-  std::string usage;
-  usage += std::string("Usage: ") + argv[0] + std::string(" [OPTIONS]");
-  gflags::SetUsageMessage(usage);
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
-  LocalizationServer server;
-  server.Run();
-  return 0;
 }

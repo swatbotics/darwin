@@ -19,7 +19,7 @@ using asio::ip::udp;
 
 class LocalizationServer {
  public:
-  LocalizationServer();
+  LocalizationServer(int server_port);
   ~LocalizationServer() {}
   void Run();
 
@@ -32,6 +32,9 @@ class LocalizationServer {
     }
     LocalizationServer* obj_;
   };
+
+  static const int kDefaultServerPort;
+
   void DataRetrievalCallback(const std::string& data);
   void ReceiveRequest();
   void HandleRequest(const asio::error_code& error,
@@ -39,6 +42,7 @@ class LocalizationServer {
   void HandleResponse(const asio::error_code& /*error*/,
                       std::size_t /*bytes_transferred*/);
 
+  int server_port_;
   Localizer localizer_;
   LocalizationServerCallback callback_;
   boost::mutex data_mutex_;
