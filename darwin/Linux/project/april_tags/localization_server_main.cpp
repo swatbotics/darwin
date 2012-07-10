@@ -14,7 +14,5 @@ int main(int argc, char* argv[]) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   LocalizationServer server(FLAGS_server_port);
   server.Run();
-  server.RunLocalizer();
-  server.Stop();
   return 0;
 }
