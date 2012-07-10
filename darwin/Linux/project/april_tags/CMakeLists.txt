@@ -28,6 +28,12 @@ if (Boost_FOUND)
 
   add_executable(status_client status_client.cpp status_client_main.cpp)
   target_link_libraries(status_client ${Boost_LIBRARIES} gflags)
+
+  add_executable(run_localized_explorer localized_explorer.cpp
+    status_client.cpp util.cpp)
+  target_link_libraries(run_localized_explorer ${DARWIN_LIBS}
+    ${Boost_LIBRARIES} gflags)
+
 else (Boost_FOUND)
   message("Cannot build localization binaries - need boost!")
 endif (Boost_FOUND)
