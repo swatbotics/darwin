@@ -14,6 +14,7 @@ add_subdirectory(lib_control_robot)
 
 add_subdirectory(control_ee)
 add_subdirectory(forwardKin)
+add_subdirectory(Jacobians)
 endif (${SDL_FOUND})
 
 
