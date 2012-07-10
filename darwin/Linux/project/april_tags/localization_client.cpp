@@ -4,27 +4,25 @@
 #include <sstream>
 
 #include <boost/bind.hpp>
-#include <gflags/gflags.h>
-
-DEFINE_string(server_name, "192.168.1.7",
-              "IP address or DNS name of the localization server to query.");
-DEFINE_int32(server_port, 9000,
-             "Port on the localization server to connect to.");
-
-#define RECV_BUFFER_SIZE 1024
 
 #define DEBUG false
 
 namespace asio = boost::asio;
 
-LocalizationClient::LocalizationClient() :
+const int LocalizationClient::kDefaultServerPort = 9000;
+const int LocalizationClient::kRecvBufferSize = 2048;
+
+LocalizationClient::LocalizationClient(std::string server_name,
+                                       int server_port=kDefaultServerPort) :
+    server_name_(server_name),
+    server_port_(server_port),
     data_mutex_(),
     localization_data_(),
     io_service_(),
     socket_(io_service_),
     remote_endpoint_(),
     send_buffer_(1, '\0'),
-    recv_buffer_(RECV_BUFFER_SIZE),
+    recv_buffer_(kRecvBufferSize),
     io_thread_()
 {
 }
@@ -67,8 +65,8 @@ void LocalizationClient::Run() {
   if (DEBUG) std::cout << "Resolving localization server name.\n";
   udp::resolver resolver(io_service_);
   std::stringstream port_string;
-  port_string << FLAGS_server_port;
-  udp::resolver::query query(udp::v4(), FLAGS_server_name,
+  port_string << server_port_;  // Convert int to string.
+  udp::resolver::query query(udp::v4(), server_name_,
                              port_string.str());
   remote_endpoint_ = *resolver.resolve(query);
 

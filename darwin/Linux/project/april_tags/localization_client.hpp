@@ -18,19 +18,24 @@ using asio::ip::udp;
 
 class LocalizationClient {
  public:
-  LocalizationClient();
+  LocalizationClient(std::string server_name, int server_port);
   ~LocalizationClient() {}
   void Run();
   void Stop();
   std::string GetData();
 
  private:
+  static const int kDefaultServerPort;
+  static const int kRecvBufferSize;
+
   void SendRequest();
   void HandleRequest(const asio::error_code& /*error*/,
                      std::size_t /*bytes_transferred*/);
   void HandleResponse(const asio::error_code& error,
                       std::size_t bytes_transferred);
 
+  std::string server_name_;
+  int server_port_;
   boost::mutex data_mutex_;
   std::string localization_data_;
   asio::io_service io_service_;
