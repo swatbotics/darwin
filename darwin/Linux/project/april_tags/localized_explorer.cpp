@@ -29,7 +29,10 @@ void LocalizedExplorer::Initialize() {
   // To make relative filenames work.
   change_dir_from_root("darwin/Linux/project/april_tags");
   InitializeMotionFramework();
+  printf("Initialize robot position? (hit enter) "); getchar();
   InitializeMotionModules();
+  printf("Start tracking mode? (hit enter) "); getchar();
+  client_.Run();
 }
 
 void LocalizedExplorer::InitializeMotionFramework() {
@@ -58,8 +61,22 @@ void LocalizedExplorer::InitializeMotionModules() {
 }
 
 void LocalizedExplorer::Process() {
-  Head::GetInstance()->MoveToHome();
+  static const double kPanRate = 1.0;
+  static const double kScanTiltAngle = 40.0;
+  Head* head = Head::GetInstance();
+  static double direction = 1.0;
+  double angle = head->GetPanAngle();
+  double new_angle = angle + direction * kPanRate;
+  if (new_angle <= head->GetRightLimitAngle()) direction = 1;
+  if (new_angle >= head->GetLeftLimitAngle()) direction = -1;
+  new_angle = angle + direction * kPanRate;
+  head->MoveByAngle(new_angle, kScanTiltAngle);
+  std::cout << "PAUSING WALKER (Waiting for goal)" << std::endl;
+
+
   std::cout << client_.GetData() << std::endl;
+  usleep(50 * 1000);
+
   //  head->MoveByAngle(0, 0);
 }
 
