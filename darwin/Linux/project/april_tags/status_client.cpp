@@ -51,7 +51,7 @@ void StatusClient::HandleRequest(const asio::error_code& error,
 void StatusClient::HandleResponse(const asio::error_code& error,
                                   std::size_t bytes_transferred) {
   if (DEBUG) std::cout << "Handling response!\n";
-  if (!error && bytes_transferred > 0) {
+  if (!error) {
     {
       boost::lock_guard<boost::mutex> lock(data_mutex_);
       data_.assign(recv_buffer_.begin(),
