@@ -5,7 +5,6 @@
 #include <string>
 
 #include <gflags/gflags.h>
-#include <opencv2/core/core.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 
 #include <LinuxDARwIn.h>
@@ -21,6 +20,9 @@ DEFINE_int32(server_port, 9000,
              "Port on the status server to connect to.");
 DEFINE_double(fps_target, 15, "Target frames per second to run at.");
 
+DEFINE_string(goal_object, "",
+              "Object whose frame goal coordinates are specified in; the "
+              "empty string represents the world frame.");
 DEFINE_bool(goal_axis_only, false,
             "Treat goal coordinates as defining an axis to point head along, "
             "rather than a specific point in space to look toward.");
@@ -35,6 +37,29 @@ DEFINE_double(tilt_igain, 0.0, "Tilt controller integral gain.");
 DEFINE_double(tilt_dgain, 0.0, "Tilt controller derivative gain.");
 
 namespace Robot {
+
+LocalizedExplorer::LocalizedObject::LocalizedObject() {
+  Initialize();
+}
+
+LocalizedExplorer::LocalizedObject::LocalizedObject(const std::string& data) {
+  Initialize();
+  ParseFromString(data);
+}
+
+void LocalizedExplorer::LocalizedObject::Initialize() {
+  r = cv::Mat_<double>::zeros(3, 1);
+  t = cv::Mat_<double>::zeros(3, 1);
+}
+
+void LocalizedExplorer::LocalizedObject::ParseFromString(
+    const std::string& data) {
+  std::stringstream ss(data);
+  std::string sep1, sep2;
+  ss >> name
+     >> sep1 >> t[0][0] >> t[1][0] >> t[2][0]
+     >> sep2 >> r[0][0] >> r[1][0] >> r[2][0];
+}
 
 LocalizedExplorer::LocalizedExplorer() :
     cm730_(NULL),
@@ -84,50 +109,71 @@ void LocalizedExplorer::InitializeMotionModules() {
 void LocalizedExplorer::Process() {
   usleep(1000 * 1000 / FLAGS_fps_target);
   std::cout << "\n";
-
-  // Retrieve data from localization client, extract head rotation info.
-  std::string data = client_.GetData();
-  std::cout << "DATA:\n" << data << "\n";
-  cv::Vec3d head_r(0, 0, 0);
-  cv::Vec3d head_t(0, 0, 0);
-  bool found_head = false;
-  std::vector<std::string> lines = split(data, '\n');
-  for (std::vector<std::string>::const_iterator it = lines.begin();
-       it != lines.end(); ++it) {
-    std::stringstream ss(*it);
-    std::string name, sep1, sep2;
-    double t[3] = {};
-    double r[3] = {};
-    ss >> name >> sep1 >> t[0] >> t[1] >> t[2]
-       >> sep2 >> r[0] >> r[1] >> r[2];
-    if (name == "head") {
-      found_head = true;
-      for (int i = 0; i < 3; ++i) {
-        head_r[i] = r[i];
-        head_t[i] = t[i];
-      }
-    }
-  }
-  if (!found_head) {
-    //    Head::GetInstance()->MoveToHome();
+  LocalizedObjectMap obj_map = RetrieveObjectData();
+  if (obj_map.count("head") == 0) {
+    // TODO: also try to point head using body tag, if we can't see head?
     Head::GetInstance()->InitTracking();
     return;
   }
+  // TODO: Make the head object an instance member, instead of a param?
+  cv::Vec3d goal_dir = GetGoalDirection(obj_map["head"], obj_map);
+  PointHeadToward(obj_map["head"], goal_dir);
+}
+
+LocalizedExplorer::LocalizedObjectMap LocalizedExplorer::RetrieveObjectData() {
+  LocalizedObjectMap obj_map;
+  // Retrieve data from localization client, extract head rotation info.
+  std::string data = client_.GetData();
+  std::cout << "DATA:\n" << data << "\n";
+  std::vector<std::string> lines = split(data, '\n');
+  for (std::vector<std::string>::const_iterator it = lines.begin();
+       it != lines.end(); ++it) {
+    LocalizedObject obj(*it);
+    obj_map[obj.name] = obj;
+  }
+  return obj_map;
+}
+
+cv::Vec3d LocalizedExplorer::GetGoalDirection(
+    const LocalizedObject& head,
+    const LocalizedObjectMap& obj_map) {
+  // Determine whether goal frame is an object or the world frame.
+  cv::Mat_<double> r_obj_to_world = cv::Mat_<double>::eye(3, 3);
+  cv::Mat_<double> t_obj_to_world = cv::Mat_<double>::zeros(3, 1);
+  if (!FLAGS_goal_object.empty() && obj_map.count(FLAGS_goal_object) > 0) {
+    LocalizedObjectMap::const_iterator it = obj_map.find(FLAGS_goal_object);
+    if (it == obj_map.end()) {
+      std::cerr << "Object not found??\n";
+    } else {
+      const LocalizedObject& obj = it->second;
+      cv::Rodrigues(obj.r, r_obj_to_world);
+      t_obj_to_world = obj.t.clone();
+    }
+  }
+
+  // Map goal point from object frame to world frame.
+  cv::Vec3d origin = t_obj_to_world;
+  cv::Vec3d goal_point_raw(FLAGS_goal_x, FLAGS_goal_y, FLAGS_goal_z);
+  cv::Mat goal_point_mat = (r_obj_to_world * cv::Mat(goal_point_raw) +
+                            t_obj_to_world);
+  cv::Vec3d goal_point = goal_point_mat;
 
   // Determine whether head should align with goal as a point or an axis.
-  cv::Point3d origin(0, 0, 0);
-  cv::Point3d goal_point(FLAGS_goal_x, FLAGS_goal_y, FLAGS_goal_z);
-  cv::Point3d head_point(head_t);
+  cv::Vec3d head_point(head.t);
   cv::Vec3d goal_dir;
   if (FLAGS_goal_axis_only) {
     goal_dir = goal_point - origin;
   } else {
     goal_dir = goal_point - head_point;
   }
+  return goal_dir;
+}
 
+void LocalizedExplorer::PointHeadToward(const LocalizedObject& head_obj,
+                                        const cv::Vec3d& goal_dir) {
   // Compute relative angles of the goal axis from the head axis.
   cv::Mat head_r_mat;
-  cv::Rodrigues(head_r, head_r_mat);
+  cv::Rodrigues(head_obj.r, head_r_mat);
   cv::Mat goal_rel = head_r_mat.inv() * cv::Mat(goal_dir);
   std::cout << "goal_rel = " << goal_rel << "\n";
   cv::Point3d goal_rel_pt(goal_rel);
