@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <string>
 
 #include <gflags/gflags.h>
 #include <opencv2/core/core.hpp>
@@ -18,12 +19,25 @@ DEFINE_string(server_name, "192.168.1.7",
               "IP address or DNS name of the status server to query.");
 DEFINE_int32(server_port, 9000,
              "Port on the status server to connect to.");
+DEFINE_double(fps_target, 15, "Target frames per second to run at.");
+
+DEFINE_double(goal_x, 1.0, "Goal head direction x-coordinate.");
+DEFINE_double(goal_y, 0.0, "Goal head direction y-coordinate.");
+DEFINE_double(goal_z, 0.0, "Goal head direction z-coordinate.");
+DEFINE_double(pan_pgain, 0.05, "Pan controller proportional gain.");
+DEFINE_double(pan_igain, 0.0, "Pan controller integral gain.");
+DEFINE_double(pan_dgain, 0.0, "Pan controller derivative gain.");
+DEFINE_double(tilt_pgain, 0.05, "Tilt controller proportional gain.");
+DEFINE_double(tilt_igain, 0.0, "Tilt controller integral gain.");
+DEFINE_double(tilt_dgain, 0.0, "Tilt controller derivative gain.");
 
 namespace Robot {
 
 LocalizedExplorer::LocalizedExplorer() :
     cm730_(NULL),
-    client_(FLAGS_server_name, FLAGS_server_port) {
+    client_(FLAGS_server_name, FLAGS_server_port),
+    pan_controller_(FLAGS_pan_pgain, FLAGS_pan_igain, FLAGS_pan_dgain),
+    tilt_controller_(FLAGS_tilt_pgain, FLAGS_tilt_igain, FLAGS_tilt_dgain) {
 }
 
 LocalizedExplorer::~LocalizedExplorer() {}
@@ -40,7 +54,7 @@ void LocalizedExplorer::Initialize() {
 }
 
 void LocalizedExplorer::InitializeMotionFramework() {
-  std::cout << "Initializing motion framework..." << std::endl;
+  std::cout << "Initializing motion framework...\n";
   LinuxCM730* linux_cm730 = new LinuxCM730(U2D_DEV_NAME);
   cm730_ = new CM730(linux_cm730);
   MotionManager* manager = MotionManager::GetInstance();
@@ -53,7 +67,7 @@ void LocalizedExplorer::InitializeMotionFramework() {
 }
 
 void LocalizedExplorer::InitializeMotionModules() {
-  std::cout << "Initializing motion modules..." << std::endl;
+  std::cout << "Initializing motion modules...\n";
   MotionManager* manager = MotionManager::GetInstance();
   Head* head = Head::GetInstance();
   manager->AddModule(head);
@@ -65,12 +79,14 @@ void LocalizedExplorer::InitializeMotionModules() {
 }
 
 void LocalizedExplorer::Process() {
-  std::string data = client_.GetData();
-  std::cout << "DATA:\n" << data << std::endl;
+  usleep(1000 * 1000 / FLAGS_fps_target);
+  std::cout << "\n";
 
+  // Retrieve data from localization client, extract head rotation info.
+  std::string data = client_.GetData();
+  std::cout << "DATA:\n" << data << "\n";
   cv::Vec3d head_r(0, 0, 0);
-  cv::Vec3d goal_x(1, 0, 0);
-  static bool found_head = false;
+  bool found_head = false;
   std::vector<std::string> lines = split(data, '\n');
   for (std::vector<std::string>::const_iterator it = lines.begin();
        it != lines.end(); ++it) {
@@ -81,23 +97,23 @@ void LocalizedExplorer::Process() {
     ss >> name >> sep1 >> t[0] >> t[1] >> t[2]
        >> sep2 >> r[0] >> r[1] >> r[2];
     if (name == "head") {
-      if (!found_head) {
-        found_head = true;
-        Head::GetInstance()->InitTracking();
-      }
+      found_head = true;
       head_r[0] = r[0];
       head_r[1] = r[1];
       head_r[2] = r[2];
     }
   }
   if (!found_head) {
-    Head::GetInstance()->MoveToHome();
+    //    Head::GetInstance()->MoveToHome();
+    Head::GetInstance()->InitTracking();
     return;
   }
-  std::cout << "head_r" << cv::Mat(head_r) << "\n";
+
+  // Compute relative angles of the goal axis from the head axis.
+  cv::Vec3d goal_dir(FLAGS_goal_x, FLAGS_goal_y, FLAGS_goal_z);
   cv::Mat head_r_mat;
   cv::Rodrigues(head_r, head_r_mat);
-  cv::Mat goal_rel = head_r_mat.inv() * cv::Mat(goal_x);
+  cv::Mat goal_rel = head_r_mat.inv() * cv::Mat(goal_dir);
   std::cout << "goal_rel = " << goal_rel << "\n";
   cv::Point3d goal_rel_pt(goal_rel);
   double hypot = cv::norm(goal_rel_pt);
@@ -106,21 +122,32 @@ void LocalizedExplorer::Process() {
   double tilt_rel = asin(goal_rel_pt.z / hypot) * 180.0 / M_PI;
   std::cout << "pan_rel = " << pan_rel << "\n";
   std::cout << "tilt_rel = " << tilt_rel << "\n";
+
+  // Use relative angles as inputs to PID controllers for head position.
   Head* head = Head::GetInstance();
-  head->MoveTracking(Point2D(pan_rel, tilt_rel));
-  /*
-  double pan = head->GetPanAngle() + pan_rel;
-  double tilt = head->GetTiltAngle() + tilt_rel;
-  std::cout << "pan = " << pan << "\n";
-  std::cout << "tilt = " << tilt << "\n";
-  head->MoveByAngle(pan, tilt);
-  */
-  usleep(1000 * 1000 / 15);
+  double pan_output = pan_controller_.Update(pan_rel);
+  double tilt_output = tilt_controller_.Update(tilt_rel);
+  head->MoveByAngle(head->GetPanAngle() + pan_output,
+                    head->GetTiltAngle() + tilt_output);
+  std::cout << "Pan PID: " << pan_controller_.GetProportionalError()
+            << " " << pan_controller_.GetIntegralError()
+            << " " << pan_controller_.GetDerivativeError()
+            << " ==> " << pan_output << "\n";
+  std::cout << "Tilt PID: " << tilt_controller_.GetProportionalError()
+            << " " << tilt_controller_.GetIntegralError()
+            << " " << tilt_controller_.GetDerivativeError()
+            << " ==> " << tilt_output << "\n";
 }
 
 }  // namespace Robot
 
-int main(void) {
+
+int main(int argc, char* argv[]) {
+  std::string usage;
+  usage += std::string("Usage: ") + argv[0] + std::string(" [OPTIONS]");
+  gflags::SetUsageMessage(usage);
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+
   printf( "\n===== April Tag Test for DARwIn =====\n\n");
   Robot::LocalizedExplorer explorer;
   explorer.Initialize();

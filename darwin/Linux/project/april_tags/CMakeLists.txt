@@ -30,7 +30,7 @@ if (Boost_FOUND)
   target_link_libraries(status_client ${Boost_LIBRARIES} gflags)
 
   add_executable(run_localized_explorer localized_explorer.cpp
-    status_client.cpp util.cpp)
+    status_client.cpp pid_controller.cpp util.cpp)
   target_link_libraries(run_localized_explorer ${DARWIN_LIBS}
     ${OPENCV_LIBRARIES} ${Boost_LIBRARIES} gflags)
 
