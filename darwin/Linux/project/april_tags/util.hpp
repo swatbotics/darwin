@@ -1,6 +1,9 @@
 #ifndef UTIL_HPP
 #define UTIL_HPP
 
+#include <string>
+#include <vector>
+
 typedef struct {
   unsigned char R;
   unsigned char G;
@@ -21,5 +24,10 @@ void change_current_dir();
 inline bool in_range(double value, double min, double max) {
   return min <= value && value <= max;
 }
+
+std::vector<std::string> &split(const std::string &s, char delim,
+                                std::vector<std::string> &elems);
+
+std::vector<std::string> split(const std::string &s, char delim);
 
 #endif  // UTIL_HPP
