@@ -32,7 +32,7 @@ if (Boost_FOUND)
   add_executable(run_localized_explorer localized_explorer.cpp
     status_client.cpp util.cpp)
   target_link_libraries(run_localized_explorer ${DARWIN_LIBS}
-    ${Boost_LIBRARIES} gflags)
+    ${OPENCV_LIBRARIES} ${Boost_LIBRARIES} gflags)
 
 else (Boost_FOUND)
   message("Cannot build localization binaries - need boost!")

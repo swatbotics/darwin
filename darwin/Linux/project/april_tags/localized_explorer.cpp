@@ -1,8 +1,12 @@
 #include "localized_explorer.hpp"
 
+#include <cmath>
 #include <iostream>
 
 #include <gflags/gflags.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+
 #include <LinuxDARwIn.h>
 
 #include "util.hpp"
@@ -61,23 +65,57 @@ void LocalizedExplorer::InitializeMotionModules() {
 }
 
 void LocalizedExplorer::Process() {
-  static const double kPanRate = 1.0;
-  static const double kScanTiltAngle = 40.0;
+  std::string data = client_.GetData();
+  std::cout << "DATA:\n" << data << std::endl;
+
+  cv::Vec3d head_r(0, 0, 0);
+  cv::Vec3d goal_x(1, 0, 0);
+  static bool found_head = false;
+  std::vector<std::string> lines = split(data, '\n');
+  for (std::vector<std::string>::const_iterator it = lines.begin();
+       it != lines.end(); ++it) {
+    std::stringstream ss(*it);
+    std::string name, sep1, sep2;
+    double t[3] = {};
+    double r[3] = {};
+    ss >> name >> sep1 >> t[0] >> t[1] >> t[2]
+       >> sep2 >> r[0] >> r[1] >> r[2];
+    if (name == "head") {
+      if (!found_head) {
+        found_head = true;
+        Head::GetInstance()->InitTracking();
+      }
+      head_r[0] = r[0];
+      head_r[1] = r[1];
+      head_r[2] = r[2];
+    }
+  }
+  if (!found_head) {
+    Head::GetInstance()->MoveToHome();
+    return;
+  }
+  std::cout << "head_r" << cv::Mat(head_r) << "\n";
+  cv::Mat head_r_mat;
+  cv::Rodrigues(head_r, head_r_mat);
+  cv::Mat goal_rel = head_r_mat.inv() * cv::Mat(goal_x);
+  std::cout << "goal_rel = " << goal_rel << "\n";
+  cv::Point3d goal_rel_pt(goal_rel);
+  double hypot = cv::norm(goal_rel_pt);
+  double hypot_xy = cv::norm(cv::Point2d(goal_rel_pt.x, goal_rel_pt.y));
+  double pan_rel = asin(goal_rel_pt.y / hypot_xy) * 180.0 / M_PI;
+  double tilt_rel = asin(goal_rel_pt.z / hypot) * 180.0 / M_PI;
+  std::cout << "pan_rel = " << pan_rel << "\n";
+  std::cout << "tilt_rel = " << tilt_rel << "\n";
   Head* head = Head::GetInstance();
-  static double direction = 1.0;
-  double angle = head->GetPanAngle();
-  double new_angle = angle + direction * kPanRate;
-  if (new_angle <= head->GetRightLimitAngle()) direction = 1;
-  if (new_angle >= head->GetLeftLimitAngle()) direction = -1;
-  new_angle = angle + direction * kPanRate;
-  head->MoveByAngle(new_angle, kScanTiltAngle);
-  std::cout << "PAUSING WALKER (Waiting for goal)" << std::endl;
-
-
-  std::cout << client_.GetData() << std::endl;
-  usleep(50 * 1000);
-
-  //  head->MoveByAngle(0, 0);
+  head->MoveTracking(Point2D(pan_rel, tilt_rel));
+  /*
+  double pan = head->GetPanAngle() + pan_rel;
+  double tilt = head->GetTiltAngle() + tilt_rel;
+  std::cout << "pan = " << pan << "\n";
+  std::cout << "tilt = " << tilt << "\n";
+  head->MoveByAngle(pan, tilt);
+  */
+  usleep(1000 * 1000 / 15);
 }
 
 }  // namespace Robot
