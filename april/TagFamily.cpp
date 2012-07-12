@@ -36,7 +36,7 @@ void TagFamily::init(int b,
   assert(d*d == bits);
 
   minimumHammingDistance = std::max(mhd, 1);
-  errorRecoveryBits = std::min(minimumHammingDistance-1, uint(1));
+  errorRecoveryBits = std::max((minimumHammingDistance-1)/2, uint(1));
   codes.assign(data, data+count);
   
 }
