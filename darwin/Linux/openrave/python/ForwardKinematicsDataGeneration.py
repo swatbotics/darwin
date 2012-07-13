@@ -13,7 +13,7 @@ def getP2N(prev, next):
     nextT = next[0:3,3]
     prevR = prev[0:3,0:3]
     prevT = prev[0:3,3]
-    P2N = numpy.zeros((3,4))
+    P2N = numpy.eye(4)
     # Rotation is nextR*prevR^T
     for i in range(3):
         for j in range(3):
@@ -70,6 +70,7 @@ each link in the local frams, and the position of each of the links.
 */
 
 #include <string>
+#include "Transform3.h"
 
 struct link;
 """)
@@ -79,13 +80,12 @@ struct link;
 """
 struct link{
   std::string NAME;
-  float MASS;            // Mass of link
-  float COM[3];          // Center of mass in the link frame
-  int PREVIOUS;          // Index of previous link
-  int NEXT;              // Index of next link (-1 for end links)
-  float T_PREV2NEXT[3][4]; // Transform from link frame to next joint
-                         // as top 3 rows of transform matrix
-  float AXIS[3];         // Axis of rotation for this link
+  float MASS;              // Mass of link
+  vec3f COM;            // Center of mass in the link frame
+  int PREVIOUS;            // Index of previous link
+  int NEXT;                // Index of next link (-1 for end links)
+  Transform3f T_PREV2NEXT; // Transform from link frame to next joint
+  vec3f AXIS;           // Axis of rotation for this link
 };
 
 """)
@@ -93,7 +93,7 @@ struct link{
 """
 struct chain{
   int FIRST;
-  float T_FROM_BODY[3][4];
+  Transform3f T_FROM_BODY;
 };
 
 """)
@@ -115,12 +115,15 @@ with open('DarwinDynamicDefinitions.cpp','w') as output:
 #include "DarwinDynamicDefinitions.h"
 
 Darwin::Darwin(){
+  float t_array[16];
+  mat4f t;
+
 """)
 
     # Information about each link
     for i in range(len(links)):
         if i in lasts + body:
-            transform = numpy.zeros((3,4))
+            transform = numpy.zeros((4,4))
             transform[0:3,0:3] = numpy.eye(3)
         else:
             transform = getP2N(links[i].GetTransform(), 
@@ -129,61 +132,56 @@ Darwin::Darwin(){
 """\
   Links[{index}].NAME = \"{name}\";
   Links[{index}].MASS = {mass};
-{com}
+  Links[{index}].COM = vec3f({com});
   Links[{index}].NEXT = {nextlink};
   Links[{index}].PREVIOUS = {prevlink};
-{axis}
+  Links[{index}].AXIS = vec3f({axis});
 {p2n}
+  t = mat4f(t_array);
+  Links[{index}].T_PREV2NEXT = Transform3f(t);
 
 """.format(index=str(i), 
            name = links[i].GetName(),
            mass=str(links[i].GetMass()),
 
-           com='\n'.join(
-                    ('  Links[{index1}].COM[{index2}] = {comvalue};'.format(
-                            index1=i, index2=j, comvalue='%f' 
-                            % COM[i][j])) for j in range(3)),
+           com=','.join(('%f' % COM[i][j]) for j in range(3)),
 
            nextlink="-1" if i in lasts else 
            "{nextindex}".format(nextindex=str(i+1)),
            prevlink="0" if i in firsts else "-1" if i in body else 
            "{previndex}".format(previndex=str(i-1)),
 
-           axis='\n'.join(
-                    ('  Links[{index1}].AXIS[{index2}] = {axisvalue};'.format(
-                            index1=i, index2=j, axisvalue='%f' 
-                            % getAxis(joints[i-1].GetAxis(), 
-                                      links[i].GetTransform())[j])) 
+           axis=','.join(
+                    ('%f' % getAxis(joints[i-1].GetAxis(), 
+                                    links[i].GetTransform())[j]) 
                     for j in range(3)),
 
            p2n='\n'.join(
-                    ('  Links[{index1}].T_PREV2NEXT[{index2}][{index3}] = {transvalue};'
-                     .format(index1=i, index2=j, index3=k, transvalue='%f' 
+                    ('  t_array[{index}] = {transvalue};'
+                     .format(index=j*4+k, transvalue='%f' 
                             % transform[j][k] ))
-                    for j in range(3) for k in range(4)),
+                    for j in range(4) for k in range(4)),
 
 )
 )
 
     for i in range(len(firsts)):
-        """
-        print i
-        print links[body[0]].GetTransform()
-        print links[firsts[i]].GetTransform()
-"""
+        
         transform_first = getP2N(links[body[0]].GetTransform(),
-                            links[firsts[i]].GetTransform())
+                                 links[firsts[i]].GetTransform())
         output.write(
 """\
   Chains[{index}].FIRST = {first};
 {transform}
+  t = mat4f(t_array);
+  Chains[{index}].T_FROM_BODY = Transform3f(t);
 
 """.format(index=i,first=firsts[i], 
            transform='\n'.join(
-                    ('  Chains[{index1}].T_FROM_BODY[{index2}][{index3}] = {transvalue};'
-                     .format(index1=i, index2=j, index3=k, transvalue='%f'
+                    ('  t_array[{index}] = {transvalue};'
+                     .format(index=j*4+k, transvalue='%f'
                              % transform_first[j][k] )) 
-                    for j in range(3) for k in range(4))))
+                    for j in range(4) for k in range(4))))
 
     output.write('}')
 

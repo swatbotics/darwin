@@ -17,52 +17,34 @@ ForwardKinematics::ForwardKinematics(){
     setAngle(i,0);
   }
   // Update body link, then the rest of the body
-  for (int i=0; i<3; i++){
-    for (int j=0; j<4; j++){
-      _transforms[0][i][j] = (i==j)? 1 : 0;
-    }
-  }
+  _transforms[0] = Transform3f();
   update();
 }
 
 void ForwardKinematics::printTrans(int index){
-  float T[3][4];
-  getTransform(index, T);
-  printTrans(T);
+  printTrans(_transforms[index]);
 }
 
-void ForwardKinematics::printTrans(const float trans[][4]){
-  for (int i=0; i<3; i++){
-    printf("%f, %f, %f, %f \n", trans[i][0], trans[i][1]
-	   , trans[i][2], trans[i][3]);
-  }
-  printf("\n");
+void ForwardKinematics::printTrans(const Transform3f trans){
+  std::cout<<trans.matrix()<<std::endl;
 }
-
 
 void ForwardKinematics::update(){
   
   int linkNum = 0;
-  float jointTrans[3][4];
-  float jointBefore[3][4];
+  Transform3f jointTrans;
+  Transform3f jointBefore;
 
   for (int chainNum=0; chainNum<5; chainNum++){
     while (_requireUpdate[chainNum]!=INT_MAX){
       linkNum = _requireUpdate[chainNum];
-      generateJointTrans(_myDar.Links[linkNum].AXIS,
-			 _angles[linkNum-1],
-			 jointTrans);
+      jointTrans = generateJointTrans(_myDar.Links[linkNum].AXIS,
+			 _angles[linkNum-1]);
       if (_myDar.Links[linkNum].PREVIOUS==0){
-	multiplyTransforms(_myDar.Chains[chainNum].T_FROM_BODY,
-			   jointTrans,
-			   _transforms[linkNum]);
+	_transforms[linkNum] = _myDar.Chains[chainNum].T_FROM_BODY * jointTrans;
       } else {
-	multiplyTransforms(_transforms[linkNum-1],
-			   _myDar.Links[linkNum-1].T_PREV2NEXT,
-			   jointBefore);
- 	multiplyTransforms(jointBefore, 
-			   jointTrans,
-			   _transforms[linkNum]);
+	jointBefore = _transforms[linkNum-1] *  _myDar.Links[linkNum-1].T_PREV2NEXT;
+	_transforms[linkNum] = jointBefore * jointTrans;
       }
       // Set the next link in the chain to be updated
       if (_myDar.Links[linkNum].NEXT==-1){
@@ -75,96 +57,46 @@ void ForwardKinematics::update(){
   return;
 }
 
-void ForwardKinematics::generateJointTrans(const float axis[], 
-					   const float angle, float result[][4]){
-
-  result[0][0] = cos(axis[1]*angle) * cos(axis[2]*angle); 
-  result[1][1] = cos(axis[0]*angle) * cos(axis[2]*angle); 
-  result[2][2] = cos(axis[0]*angle) * cos(axis[1]*angle); 
-
-  result[0][1] = -sin(axis[2]*angle);  
-  result[1][2] = -sin(axis[0]*angle);  
-  result[2][0] = -sin(axis[1]*angle);
-
-  result[1][0] = sin(axis[2]*angle);
-  result[2][1] = sin(axis[0]*angle);
-  result[0][2] = sin(axis[1]*angle);
-
-  result[0][3] = 0;
-  result[1][3] = 0;
-  result[2][3] = 0;
-
+Transform3f ForwardKinematics::generateJointTrans(const vec3f axis, 
+						  const float angle){
+  return Transform3f(quatf::fromAxisAngle(axis, angle), vec3f(0,0,0));
 }
 
-void ForwardKinematics::multiplyTransforms(const float trans1[][4],
-			const float trans2[][4], float result[][4]){
-  // trans1 is the premultiplier, trans2 is the postmultiplier
-  for (int i=0; i<3; i++){
-    for (int j=0; j<3; j++){
-      result[i][j] = trans1[i][0]*trans2[0][j] + 
-	trans1[i][1]*trans2[1][j] + trans1[i][2]*trans2[2][j];
-    }
-    result[i][3] = trans1[i][0]*trans2[0][3] + 
-      trans1[i][1]*trans2[1][3] + trans1[i][2]*trans2[2][3] + 
-      trans1[i][3];
-  }
-  return;
-}
-
-/* This function has yet to be tested
-void ForwardKinematics::getInverse(float trans[][4], float result[][4]){
-  for (int i=0; i<3; i++){
-    for (int j=0; j<3; j++){
-      result[i][j] = trans[j][i];
-    }
-    result[i][3] = trans[0][i]*trans[0][3] + 
-      trans[1][i]*trans[1][3] + trans[2][i]*trans[2][3];
-
-  }
-  return;
-}
-*/
-
-void ForwardKinematics::getCOMJacobian(float result[][20]){
+void ForwardKinematics::getCOMJacobian(vec3f result[20]){
   float total_mass = 0;
-  float accumalate[3][20];
-  for (int j=0; j<3; j++){
-    for (int k=0; k<20; k++){
-      accumalate[j][k] = 0;
-    }
+  vec3f accum[20];
+  for (int j=0; j<20; j++){
+    accum[j] = vec3f(0,0,0);
   }
 
-  float linkJacobian[3][20];
+  vec3f linkJacobian[20];
   for (int i=0; i<_numJoints+1; i++){
     getCOMJacobian(i, linkJacobian);
-    for (int j=0; j<3; j++){
-      for (int k=0; k<20; k++){
-	accumalate[j][k] += linkJacobian[j][k]*_myDar.Links[i].MASS;
-	}
+    for (int j=0; j<20; j++){
+      accum[j] = linkJacobian[j] * _myDar.Links[i].MASS + accum[j];
     }
     total_mass += _myDar.Links[i].MASS;
   }
-  for (int j=0; j<3; j++){
-    for (int k=0; k<20; k++){
-      result[j][k] = accumalate[j][k] / total_mass;
-    }
+  for (int j=0; j<20; j++){
+    result[j] = accum[j] / total_mass;
   }
   return;
 }
 
-void ForwardKinematics::getCOMJacobian(int index, float result[][20]){
+void ForwardKinematics::getCOMJacobian(int index, vec3f result[20]){
   getJacobian(index, _myDar.Links[index].COM ,result);
   return;
 }
 
 void ForwardKinematics::getJacobian(int attachedFrame, 
-				    const float position[],
-				    float result[][20]){
-  for (int i=0; i<3; i++){
-    for (int j=0; j<20; j++){
-      result[i][j] = 0;
-    }
+				    const vec3f position,
+				    vec3f result[20]){
+  // Initialize the Jacobian to zero throughout, what data structure 
+  // to store jacobian?
+  for (int i=0; i<20; i++){
+    result[i] = vec3f(0,0,0);
   }
+
   if (attachedFrame<0 || attachedFrame>20){
     printf("There is no link number %d for Jacobian\n", attachedFrame);
     exit(-1);
@@ -173,21 +105,16 @@ void ForwardKinematics::getJacobian(int attachedFrame,
     return;
   }
 
+  // The joint corresponding to the attached frame is frame-1
   int i = attachedFrame;
-  float column[3] = {0,0,0};
-  float axisVec[3] = {0,0,0};
-  float positionVec[3] = {0,0,0};
-  float GlobalPosition[3] = {0,0,0};
-  applyTransform(_transforms[attachedFrame], position, GlobalPosition);
+  vec3f column, axisVec, positionVec, GlobalPosition;
+  GlobalPosition = _transforms[attachedFrame] * position;
   while (1){
-    applyRotation(_transforms[i], _myDar.Links[i].AXIS ,axisVec);
-    for (int j=0; j<3; j++){
-      positionVec[j] = GlobalPosition[j] - _transforms[i][j][3];
-    }
-    crossX(axisVec, positionVec, column);
-    for (int j=0; j<3; j++){
-      result[j][i-1] = column[j];
-    }
+    axisVec = _transforms[i].rotFwd() * _myDar.Links[i].AXIS;
+    positionVec = GlobalPosition - _transforms[i].translation();
+    column = vec3f::cross(axisVec , positionVec);
+    // update result
+    result[i-1] = column;
     if (_myDar.Links[i].PREVIOUS == 0){
       return;
     }
@@ -195,76 +122,33 @@ void ForwardKinematics::getJacobian(int attachedFrame,
   }
 }
 
-
-void ForwardKinematics::crossX(const float v1[], const float v2[],
-			       float result[]){
-  result[0] = v1[1]*v2[2] - v1[2]*v2[1];
-  result[1] = v1[2]*v2[0] - v1[0]*v2[2];
-  result[2] = v1[0]*v2[1] - v1[1]*v2[0];
-  return;
-}
-
-void ForwardKinematics::applyRotation(const float transform[][4], 
-				       const float coordinate[],
-				       float result[]){
-  for (int i=0; i<3; i++){
-    result[i] = coordinate[0]*transform[i][0] + 
-      coordinate[1]*transform[i][1] + 
-      coordinate[2]*transform[i][2];
-  }
-  return;
-}
-
-void ForwardKinematics::applyTransform(const float transform[][4], 
-				       const float coordinate[],
-				       float result[]){
-  for (int i=0; i<3; i++){
-    result[i] = coordinate[0]*transform[i][0] + 
-      coordinate[1]*transform[i][1] + 
-      coordinate[2]*transform[i][2] + 
-      transform[i][3];
-  }
-  return;
-}
-
-void ForwardKinematics::getCOM(int index, float result[]){ 
+vec3f ForwardKinematics::getCOM(int index){ 
   if (index<0 || index >20){
     printf("asking for COM of link %d\n", index);
     exit(-1);
   }
-  applyTransform(_transforms[index], _myDar.Links[index].COM, result); 
-  return;
+  return _transforms[index] * _myDar.Links[index].COM; 
 }
 
-void ForwardKinematics::getCOM(float result[]){
+vec3f ForwardKinematics::getCOM(){
   float total_mass = 0;
-  float accumalate[3] = {0,0,0};
-  float linkCOM[3] = {0,0,0};
+  vec3f accum = vec3f(0,0,0);
+  vec3f linkCOM;
   for (int i=0; i<_numJoints+1; i++){
-    getCOM(i, linkCOM);
-    for (int j=0; j<3; j++){
-      accumalate[j] += linkCOM[j]*_myDar.Links[i].MASS;
-    }
+    accum = accum + getCOM(i) * _myDar.Links[i].MASS;
     total_mass += _myDar.Links[i].MASS;
   }
-  for (int j=0; j<3; j++){
-    result[j] = accumalate[j] / total_mass;
-  }
-  return;
+  return accum / total_mass;
 }
 
 
 
-void ForwardKinematics::getTransform(int index, float result[][4]){
+Transform3f ForwardKinematics::getTransform(int index){
   if (index<0 || index >=_numJoints+1){
     printf("attempting to get transform on link %d.\n", index);
     std::exit(-1);
   } else {
-    for (int i=0; i<3; i++){
-      for (int j=0; j<4; j++){
-	result[i][j] = _transforms[index][i][j];
-      }
-    }
+    return _transforms[index];
   }
 }
 
@@ -305,6 +189,7 @@ int ForwardKinematics::getChainNum(int index){
     std::exit(-1);
   }
 }
+
 
 float ForwardKinematics::getAngle(int index){
   if ( index<0 || index>=_numJoints){

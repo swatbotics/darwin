@@ -2,35 +2,32 @@
 
 int main(int argc, char** argv){
   
-  float step = .001;
+  float step = .01;
   ForwardKinematics myKin;
-  float Jacobian[3][20];
-  float COMbefore[3];
-  float COMafter[3];
+  vec3f Jacobian[20];
+  vec3f before, after;
+  int link = 2;
 
+  printf(" Generated Jacobian \n");
 
   myKin.getCOMJacobian(Jacobian);
-  /*
   for (int i=0; i<20; i++){
-    printf("column %d, %f, %f, %f \n", i, Jacobian[0][i], Jacobian[1][i], Jacobian[2][i]);
+    std::cout<<Jacobian[i]<<std::endl;
   }
-  printf("\n\n");
-  */
 
-  printf("Jacobian in the body frame");
+  printf("\n Numeric Jacobian Difference \n");
 
   for (int i=0; i<20; i++){
     myKin.setAngleOffset(i, -step);
     myKin.update();
-    myKin.getCOM(COMbefore);
+    before = myKin.getCOM();
     myKin.setAngleOffset(i, 2*step);
     myKin.update();
-    myKin.getCOM(COMafter);
+    after = myKin.getCOM();
     
-    printf("difference in column %d, %f, %f, %f \n", i,
-	   (COMafter[0]-COMbefore[0])/step/2 - Jacobian[0][i],
-	   (COMafter[1]-COMbefore[1])/step/2 - Jacobian[1][i],
-	   (COMafter[2]-COMbefore[2])/step/2 - Jacobian[2][i]	   );
+    std::cout<<
+      ((after-before)/(2*step) - Jacobian[i])
+	     <<std::endl;
     
     myKin.setAngleOffset(i, -step);
   }

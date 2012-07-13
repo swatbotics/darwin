@@ -243,9 +243,10 @@ bool COMinbounds(std::vector<IKReal> sol_l, std::vector<IKReal> sol_r,
     myKin.setAngle(i+8, sol_r[i]);
   }  
   myKin.update();
-  float bodyCOM[3] = {0,0,0};
+  vec3f bodyCOM_vec;
   IKReal globalCOM[3] = {0,0,0};
-  myKin.getCOM(bodyCOM);
+  bodyCOM_vec = myKin.getCOM();
+  float bodyCOM[3] = {bodyCOM_vec[0],bodyCOM_vec[1],bodyCOM_vec[2]};
   IKReal bodytrans_from_foot[3]={bodytrans[0], bodytrans[1]+.3416, bodytrans[2]};
   // bodytrans is the translation of the body relative to the body 
   // at 0 position, so we must adjust to have it centered at the foot

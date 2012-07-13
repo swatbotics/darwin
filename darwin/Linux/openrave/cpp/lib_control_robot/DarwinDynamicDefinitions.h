@@ -5,24 +5,24 @@ each link in the local frams, and the position of each of the links.
 */
 
 #include <string>
+#include "Transform3.h"
 
 struct link;
 
 struct link{
   std::string NAME;
-  float MASS;            // Mass of link
-  float COM[3];          // Center of mass in the link frame
-  int PREVIOUS;          // Index of previous link
-  int NEXT;              // Index of next link (-1 for end links)
-  float T_PREV2NEXT[3][4]; // Transform from link frame to next joint
-                         // as top 3 rows of transform matrix
-  float AXIS[3];         // Axis of rotation for this link
+  float MASS;              // Mass of link
+  vec3f COM;            // Center of mass in the link frame
+  int PREVIOUS;            // Index of previous link
+  int NEXT;                // Index of next link (-1 for end links)
+  Transform3f T_PREV2NEXT; // Transform from link frame to next joint
+  vec3f AXIS;           // Axis of rotation for this link
 };
 
 
 struct chain{
   int FIRST;
-  float T_FROM_BODY[3][4];
+  Transform3f T_FROM_BODY;
 };
 
 

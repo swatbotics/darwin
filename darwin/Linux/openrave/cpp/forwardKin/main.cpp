@@ -11,12 +11,11 @@ int main(int argc, char** argv){
     myKin.setAngle(i+10, -test_angles[i]);
   }
   myKin.update();
-  for (int i=0; i<21; i++){
-    printf("%d \n",i);
+  for(int i=0; i<21; i++){
     myKin.printTrans(i);
   }
-  float COM[3] = {0,0,0};
-  myKin.getCOM(COM);
-  printf("%f, %f, %f \n", COM[0], COM[1], COM[2]);
+  vec3f COM;
+  COM = myKin.getCOM();
+  std::cout<<COM<<std::endl;
   return 0;
 }
