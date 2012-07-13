@@ -25,6 +25,12 @@ DEFINE_bool(rigid_transform, true,
 DEFINE_bool(show_localization_error, false,
             "Show amount of error in localization of reference tags.");
 DEFINE_bool(show_display, false, "Show a visual display of detections.");
+DEFINE_bool(video_background, true,
+            "Use video as background of visual display.");
+DEFINE_bool(show_tag_labels, true,
+            "Label tags with IDs in the visual display.");
+DEFINE_bool(show_object_labels, true,
+            "Label objects with their names in the visual display.");
 DEFINE_string(config_file, "./localizer_env.cfg",
               "Configuration file for localization environment info.");
 
@@ -43,6 +49,7 @@ Localizer::TagInfo::TagInfo() :
 
 void Localizer::TagInfo::Reset() {
   detected = false;
+  perimeter = 0.0;
   center = cv::Point2d(0, 0);
   raw_r = cv::Mat_<double>::zeros(3, 1);
   raw_t = cv::Mat_<double>::zeros(3, 1);
@@ -54,23 +61,43 @@ void Localizer::TagInfo::DetectAt(const TagDetection& d) {
   Reset();
   id = d.id;
   detected = true;
+  perimeter = d.observedPerimeter;
   center = d.cxy;
   const double f = FLAGS_focal_length;
   CameraUtil::homographyToPoseCV(f, f, size, d.homography, raw_r, raw_t);
 }
 
+std::string Localizer::TagInfo::ToString() const {
+  std::stringstream sstream;
+  sstream << id << " @ "
+          << t[0][0] << " " << t[1][0] << " " << t[2][0] << " * "
+          << r[0][0] << " " << r[1][0] << " " << r[2][0];
+  return sstream.str();
+}
+
 
 Localizer::TaggedObject::TaggedObject() :
     name(""),
-    tag_ids() {
+    tag_ids(),
+    label_loc(0, 0, 0) {
   Reset();
 }
 
 void Localizer::TaggedObject::Reset() {
   localized = false;
+  primary_tag_id = -1;
   r = cv::Mat_<double>::zeros(3, 1);
   t = cv::Mat_<double>::zeros(3, 1);
 }
+
+std::string Localizer::TaggedObject::ToString() const {
+  std::stringstream sstream;
+  sstream << name << " @ "
+          << t[0][0] << " " << t[1][0] << " " << t[2][0] << " * "
+          << r[0][0] << " " << r[1][0] << " " << r[2][0];
+  return sstream.str();
+}
+
 
 Localizer::Localizer() :
     config_(),
@@ -138,6 +165,8 @@ void Localizer::InitializeConfiguration() {
         tag.ref_r[2][0] = tag_config["r_z"];
         obj.tag_ids.insert(tag.id);
       }
+      const libconfig::Setting& label = obj_config["label_loc"];
+      obj.label_loc = cv::Point3d(label["x"], label["y"], label["z"]);
     }
   } catch (libconfig::SettingException& e) {
     std::cerr << e.what() << ": Error with setting '" << e.getPath() << "'.\n";
@@ -304,6 +333,7 @@ void Localizer::LocalizeObjects() {
   for (TagInfoMap::iterator it = obj_tags_.begin();
        it != obj_tags_.end(); ++it) {
     TagInfo& tag = it->second;
+    if (!tag.detected) continue;
     cv::Mat_<double> raw_r_mat, r_mat;
     cv::Rodrigues(tag.raw_r, raw_r_mat);
     r_mat = global_rotation_ * raw_r_mat;
@@ -329,17 +359,23 @@ void Localizer::LocalizeObjects() {
 }
 
 bool Localizer::LocalizeObjectFromTags(TaggedObject& obj) {
-  // For now, just use the first detected tag - average would be better.
-  int id = -1;
+  // Use the object-identifying tag with the largest visual perimeter.
+  int best_id = -1;
+  double max_perim = 0.0;
   for (std::set<int>::const_iterator it = obj.tag_ids.begin();
        it != obj.tag_ids.end(); ++it) {
-    id = *it;
-    if (obj_tags_.count(id) > 0 && obj_tags_[id].detected) break;
+    int id = *it;
+    if (obj_tags_.count(id) > 0 && obj_tags_[id].detected
+        && obj_tags_[id].perimeter > max_perim) {
+      best_id = id;
+      max_perim = obj_tags_[id].perimeter;
+    }
   }
-  if (id == -1) return false;
+  if (best_id == -1) return false;
+  obj.primary_tag_id = best_id;
   // TODO: This stuff is a mess, calls cv::Rodrigues three times. Need to
   // either just store full rotation matrices or implement wrappers.
-  const TagInfo& tag = obj_tags_[id];
+  const TagInfo& tag = obj_tags_[best_id];
   cv::Mat_<double> tag_ref_r_mat, tag_r_mat, obj_r_mat;
   cv::Rodrigues(tag.ref_r, tag_ref_r_mat);
   cv::Mat_<double> obj_r_in_tag_frame = tag_ref_r_mat.inv();
@@ -353,8 +389,14 @@ bool Localizer::LocalizeObjectFromTags(TaggedObject& obj) {
 }
 
 void Localizer::ShowVisualDisplay() {
-  const cv::Scalar& ref_tag_color = CV_RGB(0, 0, 0);
-  const cv::Scalar& obj_tag_color = CV_RGB(0, 255, 0);
+  if (FLAGS_video_background) {
+    display_ = frame_;
+  } else {
+    display_ = cv::Mat(frame_.size(), frame_.type(), cv::Scalar(0, 0, 0, 0));
+  }
+  const cv::Scalar& ref_tag_color = (FLAGS_video_background ?
+                                     CV_RGB(0, 0, 0) : CV_RGB(255, 255, 255));
+  const cv::Scalar& obj_tag_color = CV_RGB(0, 127, 0);
   for (TagInfoMap::const_iterator it = ref_tags_.begin();
        it != ref_tags_.end(); ++it) {
     const TagInfo& tag = it->second;
@@ -375,22 +417,31 @@ void Localizer::ShowVisualDisplay() {
     cv::Rodrigues(global_rotation_.inv(), global_r_vec_inv);
     DrawFrameAxes(global_r_vec_inv,
                   TransformToCamera(ref_system_.origin->ref_t),
-                  kGlobalFrameAxesSize, CV_RGB(0, 0, 0));
+                  kGlobalFrameAxesSize, ref_tag_color);
   }
   static const double kObjFrameAxesSize = 0.1;
   for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
        it != tagged_objects_.end(); ++it) {
     const TaggedObject& obj = it->second;
     if (obj.localized) {
+      // For now, just draw this box over the standard object tag box.
+      // TODO: add a "color" field to TagInfo? Or "type"? To control display
+      // so we don't have to draw two boxes.
+      const cv::Scalar& primary_tag_color = CV_RGB(0, 255, 0);
+      DrawTagBox(obj_tags_[obj.primary_tag_id], primary_tag_color);
       cv::Mat_<double> obj_r_mat, cam_r_mat, cam_r_vec;
       cv::Rodrigues(obj.r, obj_r_mat);
       cam_r_mat = global_rotation_.inv() * obj_r_mat;
       cv::Rodrigues(cam_r_mat, cam_r_vec);
       cv::Mat_<double> cam_t = TransformToCamera(obj.t);
       DrawFrameAxes(cam_r_vec, cam_t, kObjFrameAxesSize, CV_RGB(0, 255, 0));
+      if (FLAGS_show_object_labels) {
+        DrawProjectedText(obj.name, obj.label_loc, cam_r_vec, cam_t,
+                          CV_RGB(0, 255, 0));
+      }
     }
   }
-  cv::imshow(kWindowName, frame_);
+  cv::imshow(kWindowName, display_);
   cv::waitKey(5);
 }
 
@@ -445,14 +496,19 @@ void Localizer::DrawTagBox(const TagInfo& tag, const cv::Scalar& color) {
   }
   const cv::Mat_<cv::Point3d> points(npoints, 1, points_raw);
   DrawProjectedPoints(points, edges, tag.raw_r, tag.raw_t, color);
-  // TODO: Optionally also draw the tag id with cv::putText()?
+  if (FLAGS_show_tag_labels) {
+    std::stringstream sstream;
+    sstream << "#" << tag.id;
+    const cv::Point3d text_point(0, 0, s / 2);
+    DrawProjectedText(sstream.str(), text_point, tag.raw_r, tag.raw_t, color);
+  }
 }
 
 void Localizer::DrawProjectedPoints(
     const cv::Mat_<cv::Point3d>& points,
     const std::vector<std::pair<int, int> >& edges,
-    const cv::Mat_<double> r_vec,
-    const cv::Mat_<double> t_vec,
+    const cv::Mat_<double>& r_vec,
+    const cv::Mat_<double>& t_vec,
     const cv::Scalar& color) {
   const double f = FLAGS_focal_length;
   double K[9] = {
@@ -465,44 +521,58 @@ void Localizer::DrawProjectedPoints(
   const cv::Mat_<double> distCoeffs = cv::Mat_<double>::zeros(4,1);
   cv::projectPoints(points, r_vec, t_vec, Kmat, distCoeffs, proj_points);
   for (size_t i = 0; i < edges.size(); ++i) {
-    cv::line(frame_,
+    cv::line(display_,
              proj_points(edges[i].first, 0),
              proj_points(edges[i].second, 0),
              color, 1, CV_AA);
   }
 }
 
+void Localizer::DrawProjectedText(const std::string& text,
+                                  const cv::Point3d& point,
+                                  const cv::Mat_<double>& r_vec,
+                                  const cv::Mat_<double>& t_vec,
+                                  const cv::Scalar& color) {
+  cv::Mat_<cv::Point3d> points(1, 1, point);
+  // TODO: This definition of the K matrix repeats code in DrawProjectedPoints,
+  // above - should refactor projection part out.
+  const double f = FLAGS_focal_length;
+  double K[9] = {
+    f, 0, optical_center_.x,
+    0, f, optical_center_.y,
+    0, 0, 1
+  };
+  const cv::Mat_<double> Kmat(3, 3, K);
+  cv::Mat_<cv::Point2d> proj_points(points.size());
+  const cv::Mat_<double> distCoeffs = cv::Mat_<double>::zeros(4,1);
+  cv::projectPoints(points, r_vec, t_vec, Kmat, distCoeffs, proj_points);
+  const int font_face = cv::FONT_HERSHEY_DUPLEX;
+  const double font_scale = 0.75;
+  const int thickness = 1;
+  cv::Size text_size = cv::getTextSize(text, font_face, font_scale,
+                                       thickness, NULL);
+  cv::Point2d text_center(-text_size.width * 0.5, text_size.height * 0.5);
+  cv::Point2d centered_point = proj_points(0, 0) + text_center;
+  cv::putText(display_, text, centered_point, font_face,
+              font_scale, color, thickness, CV_AA);
+}
+
 void Localizer::GenerateLocalizationData(DataCallbackFunc* data_callback) {
-  if (data_callback != NULL) {
-    std::stringstream sstream;
-    // TODO: At some point, stop returning data for bare tags?
-    for (TagInfoMap::const_iterator it = obj_tags_.begin();
-         it != obj_tags_.end(); ++it) {
-      const TagInfo& tag = it->second;
-      // TODO: This should probably be tag.ToString() or something.
-      sstream << tag.id << " @ "
-              << tag.t[0][0] << " "
-              << tag.t[1][0] << " "
-              << tag.t[2][0] << " * "
-              << tag.r[0][0] << " "
-              << tag.r[1][0] << " "
-              << tag.r[2][0] << "\n";
-    }
-    for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
-         it != tagged_objects_.end(); ++it) {
-      const TaggedObject& obj = it->second;
-      // TODO: This should probably be obj.ToString() or something.
-      sstream << obj.name << " @ "
-              << obj.t[0][0] << " "
-              << obj.t[1][0] << " "
-              << obj.t[2][0] << " * "
-              << obj.r[0][0] << " "
-              << obj.r[1][0] << " "
-              << obj.r[2][0] << "\n";
-    }
-    // Call the callback with the generated data.
-    (*data_callback)(sstream.str());
+  if (data_callback == NULL) return;
+  std::stringstream sstream;
+  // TODO: At some point, stop returning data for bare tags?
+  for (TagInfoMap::const_iterator it = obj_tags_.begin();
+       it != obj_tags_.end(); ++it) {
+    const TagInfo& tag = it->second;
+    if (tag.detected) sstream << tag.ToString() << "\n";
   }
+  for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
+       it != tagged_objects_.end(); ++it) {
+    const TaggedObject& obj = it->second;
+    if (obj.localized) sstream << obj.ToString() << "\n";
+  }
+  // Call the callback with the generated data.
+  (*data_callback)(sstream.str());
 }
 
 void Localizer::Reset() {

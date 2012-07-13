@@ -1,8 +1,7 @@
-#ifndef LOCALIZATION_CLIENT_HPP
-#define LOCALIZATION_CLIENT_HPP
+#ifndef STATUS_SERVER_HPP
+#define STATUS_SERVER_HPP
 
 #include <string>
-
 #include <boost/asio.hpp>
 #include <boost/thread/thread.hpp>
 
@@ -16,29 +15,31 @@ typedef boost::thread thread;
 namespace asio = boost::asio;
 using asio::ip::udp;
 
-class LocalizationClient {
+class StatusServer {
  public:
-  LocalizationClient();
-  ~LocalizationClient() {}
+  StatusServer(int server_port);
+  ~StatusServer() {}
+  void SetData(const std::string& data);
   void Run();
   void Stop();
-  std::string GetData();
 
  private:
-  void SendRequest();
-  void HandleRequest(const asio::error_code& /*error*/,
-                     std::size_t /*bytes_transferred*/);
-  void HandleResponse(const asio::error_code& error,
-                      std::size_t bytes_transferred);
+  static const int kDefaultServerPort;
 
+  void ReceiveRequest();
+  void HandleRequest(const asio::error_code& error,
+                     std::size_t /*bytes_transferred*/);
+  void HandleResponse(const asio::error_code& /*error*/,
+                      std::size_t /*bytes_transferred*/);
+
+  int server_port_;
   boost::mutex data_mutex_;
-  std::string localization_data_;
+  std::string data_;
   asio::io_service io_service_;
   udp::socket socket_;
   udp::endpoint remote_endpoint_;
-  std::vector<char> send_buffer_;
-  std::vector<char> recv_buffer_;
+  boost::array<int, 1> recv_buffer_;
   asio::thread io_thread_;
 };
 
-#endif  // LOCALIZATION_CLIENT_HPP
+#endif  // STATUS_SERVER_HPP

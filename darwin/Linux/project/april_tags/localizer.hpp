@@ -25,9 +25,11 @@ class Localizer {
     TagInfo();
     void Reset();
     void DetectAt(const TagDetection& d);
+    std::string ToString() const;
     int id;
     bool detected;
     double size;
+    double perimeter;
     cv::Point2d center;
     cv::Mat_<double> ref_r;  // Rotation vector
     cv::Mat_<double> ref_t;
@@ -45,9 +47,12 @@ class Localizer {
   struct TaggedObject {
     TaggedObject();
     void Reset();
+    std::string ToString() const;
     std::string name;
     std::set<int> tag_ids;
     bool localized;
+    int primary_tag_id;
+    cv::Point3d label_loc;
     cv::Mat_<double> r;  // Rotation vector
     cv::Mat_<double> t;
   };
@@ -78,9 +83,14 @@ class Localizer {
   void DrawTagBox(const TagInfo& tag, const cv::Scalar& color);
   void DrawProjectedPoints(const cv::Mat_<cv::Point3d>& points,
                            const std::vector<std::pair<int, int> >& edges,
-                           const cv::Mat_<double> r_vec,
-                           const cv::Mat_<double> t_vec,
+                           const cv::Mat_<double>& r_vec,
+                           const cv::Mat_<double>& t_vec,
                            const cv::Scalar& color);
+  void DrawProjectedText(const std::string& text,
+                         const cv::Point3d& point,
+                         const cv::Mat_<double>& r_vec,
+                         const cv::Mat_<double>& t_vec,
+                         const cv::Scalar& color);
   void GenerateLocalizationData(DataCallbackFunc* data_callback);
   void Reset();
 
@@ -98,6 +108,7 @@ class Localizer {
   TaggedObjectMap tagged_objects_;
   cv::Mat_<double> global_translation_;
   cv::Mat_<double> global_rotation_;
+  cv::Mat display_;
 };
 
 #endif  // LOCALIZER_HPP

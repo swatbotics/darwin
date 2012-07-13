@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Usage: ./localization_client.sh [HOSTNAME] [PORT]
-# Simple script using netcat to test localization server.
+# Usage: ./status_client.sh [HOSTNAME] [PORT]
+# Simple script using netcat to test status server.
 
 # Defaults.
 HOSTNAME=127.0.0.1
