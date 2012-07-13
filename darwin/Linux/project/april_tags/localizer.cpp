@@ -558,22 +558,21 @@ void Localizer::DrawProjectedText(const std::string& text,
 }
 
 void Localizer::GenerateLocalizationData(DataCallbackFunc* data_callback) {
-  if (data_callback != NULL) {
-    std::stringstream sstream;
-    // TODO: At some point, stop returning data for bare tags?
-    for (TagInfoMap::const_iterator it = obj_tags_.begin();
-         it != obj_tags_.end(); ++it) {
-      const TagInfo& tag = it->second;
-      if (tag.detected) sstream << tag.ToString() << "\n";
-    }
-    for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
-         it != tagged_objects_.end(); ++it) {
-      const TaggedObject& obj = it->second;
-      if (obj.localized) sstream << obj.ToString() << "\n";
-    }
-    // Call the callback with the generated data.
-    (*data_callback)(sstream.str());
+  if (data_callback == NULL) return;
+  std::stringstream sstream;
+  // TODO: At some point, stop returning data for bare tags?
+  for (TagInfoMap::const_iterator it = obj_tags_.begin();
+       it != obj_tags_.end(); ++it) {
+    const TagInfo& tag = it->second;
+    if (tag.detected) sstream << tag.ToString() << "\n";
   }
+  for (TaggedObjectMap::const_iterator it = tagged_objects_.begin();
+       it != tagged_objects_.end(); ++it) {
+    const TaggedObject& obj = it->second;
+    if (obj.localized) sstream << obj.ToString() << "\n";
+  }
+  // Call the callback with the generated data.
+  (*data_callback)(sstream.str());
 }
 
 void Localizer::Reset() {

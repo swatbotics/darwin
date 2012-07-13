@@ -107,7 +107,8 @@ public:
                                const TagDetection& det) const;
 
   cv::Mat detectionImage(const TagDetection& det,
-                         const cv::Size& size, int cvtype) const;
+                         const cv::Size& size, int cvtype,
+                         const cv::Scalar& bgcolor = cv::Scalar(0,0,0,0)) const;
   
   cv::Mat superimposeDetections(const cv::Mat& image,
                                 const TagDetectionArray& detections) const;

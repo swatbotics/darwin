@@ -6,6 +6,10 @@ include_directories(include)
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-sign-compare")
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-sign-compare")
 
+if (APPLE)
+  add_definitions("-DHAVE_XLOCALE_H")
+endif(APPLE)
+
 add_library(config++
   src/grammar.c
   src/libconfig.c

@@ -7,11 +7,18 @@
 #include "MathUtil.h"
 #include "Geometry.h"
 #include "GrayModel.h"
+#include "DebugImage.h"
 
 #include <sys/time.h>
 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+
+#ifdef HAVE_CGAL
+#include <CGAL/Simple_cartesian.h>
+#include <CGAL/Polygon_2.h>
+#include <CGAL/extremal_polygon_2.h>
+#endif 
 
 #define _USE_FAST_MATH_
 
@@ -19,39 +26,64 @@ typedef std::vector<at::real> RealArray;
 typedef std::vector<size_t> SizeArray;
 typedef std::vector<uint64_t> Uint64Array;
 
-enum TimerIndex {
-  total_time = 0,
-  step1_time,
-  step2_time,
-  step3_time,
-  step3a_time,
-  step3b_time,
-  step3c_time,
-  step4_time,
-  step5_time,
-  step6_time,
-  step7_time,
-  step7b_time,
-  step8_time,
-  step9_time,
-  cleanup_time,
-  num_timers
+struct Step {
+
+  int value;
+  int index;
+
+  Step(): value(0), index(0) {}
+  Step(int v): value(v), index(0) {}
+  Step(int v, int i): value(v), index(i) {}
+
 };
 
-static double start_times[num_timers];
-static double run_times[num_timers];
-static const char* descriptions[num_timers];
+bool operator==(const Step& s1, const Step& s2) {
+  return s1.value == s2.value && s1.index == s2.index;
+}
+
+bool operator<(const Step& s1, const Step& s2) {
+  return ( (s1.value < s2.value) ||
+           (s1.value == s2.value && s1.index < s2.index) );
+}
+
+const char* TagDetector::kDefaultDebugWindowName = "";
+
+static const at::real kDefaultSigma = 0;
+static const at::real kDefaultSegSigma = 0.8;
+static const bool     kDefaultSegDecimate = false;
+static const at::real kDefaultMinMag = 0.004;
+static const at::real kDefaultMaxEdgeCost = 30*M_PI/180;
+static const at::real kDefaultThetaThresh = 100;
+static const at::real kDefaultMagThresh = 1200;
+static const at::real kDefaultMinimumLineLength = 4;
+static const at::real kDefaultMinimumSegmentSize = 4;
+static const at::real kDefaultMinimumTagSize = 6;
+static const at::real kDefaultMaxQuadAspectRatio = 32;
+static const bool     kDefaultRefineQuads = false;
+static const bool     kDefaultRefineBad = false;
+static const bool     kDefaultNewQuadAlgorithm = false;
+
+
+struct TimingInfo {
+
+  double start;
+  double run;
+  const char* desc;
+
+};
+
+typedef std::map<Step, TimingInfo> TimingLookup;
+TimingLookup timers;
+
 static int num_iterations = -1;
 static int num_detections;
 
-#define START_PROFILE(which, what) \
-  start_times[which] = getTimeAsDouble(); descriptions[which] = what;
-#define END_PROFILE(which) \
-  run_times[which] += (getTimeAsDouble() - start_times[which]); \
-  num_iterations += (which == total_time) ? 1 : 0;
-#define REPORT_PROFILE(which) \
-  printf("% 6.1fms - %s - %s\n", (run_times[which] / num_iterations * 1000), \
-         #which, (descriptions[which] ? descriptions[which] : ""));
+#define START_PROFILE(v, i, what)                                       \
+  if (timers.find(Step(v,i)) == timers.end()) { timers[Step(v,i)].run = 0; } \
+  timers[Step(v,i)].start = getTimeAsDouble(); timers[Step(v,i)].desc = what;
+#define END_PROFILE(v,i)                                        \
+  timers[Step(v,i)].run += (getTimeAsDouble() - timers[Step(v,i)].start); \
+  num_iterations += (Step(v,i) == Step(0,0)) ? 1 : 0;
 
 static double getTimeAsDouble() {
   struct timeval tp;
@@ -60,30 +92,25 @@ static double getTimeAsDouble() {
 }
 
 void TagDetector::initTimers() {
+
   num_iterations = 0;
   num_detections = 0;
-  memset(run_times, 0, sizeof(run_times));
-  memset(descriptions, 0, sizeof(descriptions));
+
+  
 }
 
 void TagDetector::reportTimers() {
+
   std::cout << "report averaged over " << num_iterations << " frames with " << num_detections << " detections (" << (double(num_detections)/num_iterations) << " per frame)\n\n";
-  REPORT_PROFILE(total_time);
-  std::cout << "\n";
-  REPORT_PROFILE(step1_time);
-  REPORT_PROFILE(step2_time);
-  REPORT_PROFILE(step3_time);
-  REPORT_PROFILE(step3a_time);
-  REPORT_PROFILE(step3b_time);
-  REPORT_PROFILE(step3c_time);
-  REPORT_PROFILE(step4_time);
-  REPORT_PROFILE(step5_time);
-  REPORT_PROFILE(step6_time);
-  REPORT_PROFILE(step7_time);
-  REPORT_PROFILE(step7b_time);
-  REPORT_PROFILE(step8_time);
-  REPORT_PROFILE(step9_time);
-  REPORT_PROFILE(cleanup_time);
+
+  for (TimingLookup::const_iterator i=timers.begin(); i!=timers.end(); ++i) {
+    std::cout << std::setw(12) << (i->second.run / num_iterations);
+    if (i->first.value) { std::cout << "  "; }
+    if (i->first.index) { std::cout << "  "; }
+    std::cout << " - " << i->second.desc << "\n";
+  }
+
+
 }
 
 
@@ -202,7 +229,22 @@ bool detectionsOverlapTooMuch(const TagDetection& a, const TagDetection& b)
 
 //////////////////////////////////////////////////////////////////////
 
-const char* TagDetector::kDefaultDebugWindowName = "";
+
+TagDetectorParams::TagDetectorParams() :
+  sigma(kDefaultSigma),
+  segSigma(kDefaultSegSigma),
+  segDecimate(kDefaultSegDecimate),
+  minMag(kDefaultMinMag),
+  maxEdgeCost(kDefaultMaxEdgeCost),
+  thetaThresh(kDefaultThetaThresh),
+  magThresh(kDefaultMagThresh),
+  minimumLineLength(kDefaultMinimumLineLength),
+  minimumSegmentSize(kDefaultMinimumSegmentSize),
+  minimumTagSize(kDefaultMinimumTagSize),
+  maxQuadAspectRatio(kDefaultMaxQuadAspectRatio),
+  refineQuads(kDefaultRefineQuads),
+  refineBad(kDefaultRefineBad),
+  newQuadAlgorithm(kDefaultNewQuadAlgorithm) { }
 
 TagDetector::TagDetector(const TagFamily& f,
                          const TagDetectorParams& parameters) :
@@ -211,6 +253,25 @@ TagDetector::TagDetector(const TagFamily& f,
     debug(kDefaultDebug),
     debugNumberFiles(kDefaultDebugNumberFiles),
     debugWindowName(kDefaultDebugWindowName) {
+
+  int dd = tagFamily.d + 2 * tagFamily.blackBorder;
+
+  for (int i=-1; i<=dd; ++i) {
+    at::real fi = at::real(i+0.5) / dd;
+    for (int j=-1; j<=dd; ++j) {
+      at::real fj = at::real(j+0.5) / dd;
+      at::real t = -1;
+      if (i == -1 || j == -1 || i == dd || j == dd) {
+        t = 255; 
+      } else if (i == 0 || j == 0 || i+1 == dd || j+1 == dd) {
+        t = 0;
+      }
+      if (t >= 0) {
+        tpoints.push_back(TPoint(fi, fj, t));
+      }
+    }
+  }
+
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -273,7 +334,8 @@ void emitDebugImage(const std::string& windowName,
                     int step, int substep, bool number,
                     const std::string& label,
                     const cv::Mat& img,
-                    ScaleType type) {
+                    ScaleType type,
+                    bool resize) {
 
   static int num = -1;
 
@@ -294,94 +356,268 @@ void emitDebugImage(const std::string& windowName,
 
   } else {
 
-    labelAndWaitForKey(windowName, label, img, type);
+    labelAndWaitForKey(windowName, label, img, type, resize);
 
   }
 
 }
 
-void TagDetector::process(const cv::Mat& orig,
-                          const at::Point& opticalCenter,
-                          TagDetectionArray& detections) const {
+static bool ccw(const at::Point& p1, 
+                const at::Point& p2, 
+                const at::Point& p3) {
 
-  if (num_iterations < 0) { initTimers(); }
+  return (p2.x - p1.x)*(p3.y - p1.y) - (p2.y - p1.y)*(p3.x - p1.x) > 0;
 
-  START_PROFILE(total_time, "overall time");
+}
 
-  if (debug) { 
-    emitDebugImage(debugWindowName, 
-                   0, 0, debugNumberFiles,
-                   "Orig", 
-                   orig, ScaleNone); 
+struct DSegment {
+
+  at::Point p;      // starting endpoint
+  at::Point t;      // unit tangent vector
+  at::Point n;      // unit normal vector
+  at::real  length; // lenght
+
+  DSegment() {}
+
+  DSegment(const at::Point& p1, 
+           const at::Point& p2) {
+
+    p = p1;
+    t = p2 - p1;
+    length = sqrt(t.dot(t));
+    t = t * (1 / length);
+    n = at::Point( t.y, -t.x );
+
   }
 
-  // This is a very long function, but it can't really be
-  // factored any more simply: it's just a long sequence of
-  // sequential operations.
+  bool query(const at::Point& q, 
+             at::real utol,
+             at::real dmin,
+             at::real dmax) {
 
-  ///////////////////////////////////////////////////////////
-  // Step one. Preprocess image (convert to float (grayscale)
-  // and low pass if necessary.)
+    at::Point diff = q - p;
+    at::real u = diff.dot(t);
 
-  START_PROFILE(step1_time, "preprocess image and lopass");
-
-  cv::Mat origbw;
-
-  if (orig.channels() == 1) {
-    origbw = orig;
-  } else {
-    cv::cvtColor(orig, origbw, cv::COLOR_RGB2GRAY);
-  }
-
-  at::Mat fimOrig;
-  if (orig.depth() != at::IMAGE_TYPE) {
-    origbw.convertTo(fimOrig, at::IMAGE_TYPE, 1.0/255);
-  } else {
-    fimOrig = origbw;
-  }
-
-  at::Mat fim;
-
-  if (params.sigma > 0) {
-    cv::GaussianBlur(fimOrig, fim, cv::Size(0,0), params.sigma);
-    if (debug) { 
-      emitDebugImage(debugWindowName, 
-                     1, 0, debugNumberFiles,
-                     "Blur", 
-                     fim, ScaleNone); 
+    if (u < utol || u > length - utol) {
+      return false;
     }
-  } else {
-    fim = fimOrig;
+
+    at::real d = diff.dot(n);
+    if (d < dmin || d > dmax) {
+      return false;
+    }
+
+    return true;
+
   }
+  
+};
 
 
-  cv::Mat rgbOrig;
+
+void TagDetector::getQuads_MZ(const Images& images,
+                              QuadArray& quads) const {
+
+#ifndef HAVE_CGAL
+
+  std::cerr << "Can't run new thing, no CGAL!\n";
+  exit(1);
+
+#else
+
+  START_PROFILE(2, 0, "threshold image");
+
+  cv::Mat thresh;
+
+  cv::adaptiveThreshold(images.origBW8, thresh, 255, 
+                        cv::ADAPTIVE_THRESH_MEAN_C,
+                        cv::THRESH_BINARY_INV, 9, 25);
+
 
   if (debug) {
-    cv::Mat rgb;
-    if (orig.channels() == 3) {
-      rgb = orig;
-    } else {
-      cv::cvtColor(orig, rgb, cv::COLOR_GRAY2RGB);
-    }
-    if (rgb.depth() != CV_8U) {
-      at::real scl = 1;
-      if (rgb.depth() == CV_32F || rgb.depth() == CV_64F) {
-        scl = 255;
+    emitDebugImage(debugWindowName,
+                   2, 0, debugNumberFiles,
+                   "Thresholded",
+                   thresh,
+                   ScaleNone, true);
+  }
+
+  END_PROFILE(2, 0);
+
+  START_PROFILE(3, 0, "find contours");
+
+  std::vector< std::vector< cv::Point2i > > contours;
+  std::vector< cv::Vec4i > hierarchy;
+
+  cv::findContours(thresh, contours, hierarchy,
+                   CV_RETR_CCOMP,
+                   CV_CHAIN_APPROX_SIMPLE);
+
+
+  if (debug) {
+
+    cv::Mat rgbu = images.origRGB / 2 + 127;
+
+    const ScalarVec& ccolors = getCColors();
+
+
+    for (size_t i=0; i<contours.size(); ++i) {
+      cv::Scalar color = ccolors[i % ccolors.size() ];
+      if (hierarchy[i][3] < 0) {
+        cv::drawContours( rgbu, contours, i, color, 1, CV_AA );
       }
-      rgb.convertTo(rgbOrig, scl);
-    } else {
-        rgbOrig = rgb;
+    }
+
+    emitDebugImage(debugWindowName,
+                   3, 0, debugNumberFiles,
+                   "Contours",
+                   rgbu,
+                   ScaleNone, true);
+
+
+  }
+
+  END_PROFILE(3, 0);
+
+  START_PROFILE(4, 0, "compute convex hulls");
+
+  std::vector< std::vector< cv::Point2i > > hulls;
+    
+  for (size_t i=0; i<contours.size(); ++i) {
+    if (hierarchy[i][3] < 0 && contours[i].size() >= 4) {
+      std::vector<cv::Point2i> hull;
+      cv::convexHull( contours[i], hull );
+      hulls.push_back(hull);
     }
   }
 
-  END_PROFILE(step1_time);
+  if (debug) {
+
+    cv::Mat rgbu = images.origRGB / 2 + 127;
+
+    const ScalarVec& ccolors = getCColors();
+
+    for (size_t i=0; i<hulls.size(); ++i) {
+      cv::Scalar color = ccolors[i % ccolors.size() ];
+      cv::drawContours( rgbu, hulls, i, color, 1, CV_AA );
+    }
+
+    emitDebugImage(debugWindowName,
+                   4, 0, debugNumberFiles,
+                   "Hulls",
+                   rgbu,
+                   ScaleNone, true);
+
+
+  }
+
+  END_PROFILE(4, 0);
+
+  START_PROFILE(5, 0, "find maximum inscribed quadrilaterals");
+
+  typedef CGAL::Simple_cartesian<int>   K;
+  typedef K::Point_2                    Point;
+  typedef CGAL::Polygon_2<K>            Polygon_2;
+  
+  for (size_t i=0; i<hulls.size(); ++i) {
+    
+    Polygon_2 cpoly;
+    for (size_t j=0; j<hulls[i].size(); ++j) {
+      cpoly.push_back( Point( hulls[i][j].x, hulls[i][j].y ) );
+    }
+    
+    Polygon_2 k_gon;
+    CGAL::maximum_area_inscribed_k_gon_2( cpoly.vertices_begin(), 
+                                          cpoly.vertices_end(), 4, 
+                                          std::back_inserter(k_gon));
+
+    at::Point p[4];
+    
+    for (int i=0; i<4; ++i) {
+      const Point& ki = k_gon[4-i-1];
+      p[i] = at::Point( ki.x() + 0.5, ki.y() + 0.5 );
+    }
+
+    if (ccw(p[0], p[1], p[2])) {
+      std::swap(p[0], p[3]);
+      std::swap(p[1], p[2]);
+    }
+
+    at::real observedPerimeter = 0;
+    bool ok = true;
+    at::real dmax = 0;
+
+    for (int i=0; i<4; ++i) {
+      int j = (i+1)%4;
+      at::Point diff = p[i] - p[j];
+      at::real dij = sqrt(diff.dot(diff));
+      dmax = std::max(dmax, dij);
+      if (dij < params.minimumTagSize) {
+        ok = false;
+        break;
+      }
+      observedPerimeter += dij;
+    }
+
+    at::real dmin = images.orig.cols + images.orig.rows;
+    for (int i=0; i<4; ++i) {
+      for (int j=0; j<i; ++j) {
+        at::Point diff = p[i] - p[j];
+        at::real dij = sqrt(diff.dot(diff));
+        dmin = std::min(dmin, dij);
+      }
+    }
+
+    if (ok && dmax / dmin < 6) {
+      quads.push_back(new Quad(p, images.opticalCenter, observedPerimeter));
+    }
+    
+  }
+
+  END_PROFILE(5, 0);
+
+#endif
+
+}
+
+const bool refine_debug = false;
+const int refine_max_iter = 10;
+const at::real refine_max_grad = 1e-3;
+
+void TagDetector::refineQuads_MZ(const Images& images,
+                                 QuadArray& quads) const {
+
+  START_PROFILE(7,1, "refine quads");
+
+
+  for (size_t i=0; i<quads.size(); ++i) {
+    
+    Quad& quad = *(quads[i]);
+
+    refineQuad( images.origBW8, 
+                images.gx, images.gy, 
+                quad.p, tpoints, 
+                refine_debug,
+                refine_max_iter,
+                refine_max_grad );
+
+    quad.recomputeHomography();
+
+  }
+
+  END_PROFILE(7,1);
+
+}
+
+void TagDetector::getQuads_AT(const Images& images,
+                              QuadArray& quads) const {
+
 
   ///////////////////////////////////////////////////////////
   // Step two. For each pixel, compute the local gradient. We
   // store the direction and magnitude.
 
-  START_PROFILE(step2_time, "compute gradient direction and magnitude");
+  START_PROFILE(2, 0, "compute gradient direction and magnitude");
 
   // This step is quite sensitive to noise, since a few bad
   // theta estimates will break up segments, causing us to miss
@@ -392,18 +628,18 @@ void TagDetector::process(const cv::Mat& orig,
 
   if (params.segSigma > 0) {
     if (params.segSigma == params.sigma) {
-      fimseg = fim;
+      fimseg = images.fim;
     } else {
-      cv::GaussianBlur(fimOrig, fimseg, cv::Size(0,0), params.segSigma);
+      cv::GaussianBlur(images.fimOrig, fimseg, cv::Size(0,0), params.segSigma);
     }
     if (debug) { 
       emitDebugImage(debugWindowName, 
                      2, 0, debugNumberFiles,
                      "Seg. Blur", 
-                     fimseg, ScaleNone); 
+                     fimseg, ScaleNone, true); 
     }
   } else {
-    fimseg = fimOrig;
+    fimseg = images.fimOrig;
   }
 
   if (params.segDecimate) {
@@ -453,7 +689,7 @@ void TagDetector::process(const cv::Mat& orig,
     }
   }
 
-  END_PROFILE(step2_time);
+  END_PROFILE(2,0);
 
   if (debug) {
 
@@ -491,12 +727,12 @@ void TagDetector::process(const cv::Mat& orig,
     emitDebugImage(debugWindowName,
                    2, 1, debugNumberFiles,
                    "Theta", 
-                   fimTheta, ScaleMinMax);
+                   fimTheta, ScaleMinMax, true);
     
     emitDebugImage(debugWindowName, 
                    2, 2, debugNumberFiles,
                    "Magnitude", 
-                   fimMag, ScaleMinMax);
+                   fimMag, ScaleMinMax, true);
 
   }
 
@@ -506,13 +742,13 @@ void TagDetector::process(const cv::Mat& orig,
   // thetas together. This is a greedy algorithm: we start with
   // the most similar pixels.  We use 4-connectivity.
 
-  START_PROFILE(step3_time, "segment");
+  START_PROFILE(3,0, "segment");
 
   UnionFindSimple uf(fimseg.cols*fimseg.rows);
 
   if (true) {
     
-    START_PROFILE(step3a_time, "build edges array");
+    START_PROFILE(3,1, "build edges array");
 
     int width = fimseg.cols;
     int height = fimseg.rows;
@@ -605,16 +841,16 @@ void TagDetector::process(const cv::Mat& orig,
       }
     }
     
-    END_PROFILE(step3a_time);
+    END_PROFILE(3,1);
 
-    START_PROFILE(step3b_time, "sort edges array");
+    START_PROFILE(3,2, "sort edges array");
 
     //sort those edges by weight (lowest weight first).
     countingSortLongArray(edges, nedges, -1, WEIGHT_MASK);
 
-    END_PROFILE(step3b_time);
+    END_PROFILE(3,2);
 
-    START_PROFILE(step3c_time, "merge edges");
+    START_PROFILE(3,3, "merge edges");
 
     // process edges in order of increasing weight, merging
     // clusters if we can do so without exceeding the
@@ -675,18 +911,18 @@ void TagDetector::process(const cv::Mat& orig,
       }
     }
 
-    END_PROFILE(step3c_time);
+    END_PROFILE(3,3);
 
   }
 
-  END_PROFILE(step3_time);
+  END_PROFILE(3,0);
 
   ///////////////////////////////////////////////////////////
   // Step four. Loop over the pixels again, collecting
   // statistics for each cluster. We will soon fit lines to
   // these points.
 
-  START_PROFILE(step4_time, "build clusters");
+  START_PROFILE(4,0, "build clusters");
   
   ClusterLookup clusters;
 
@@ -699,7 +935,7 @@ void TagDetector::process(const cv::Mat& orig,
       
       int rep = (int) uf.getRepresentative(y*fimseg.cols + x);
       
-      clusters[rep].push_back(XYW(x,y,fimMag(y,x)));
+      clusters[rep].push_back(XYW(x+0.5,y+0.5,fimMag(y,x)));
 
     }
   }
@@ -734,17 +970,17 @@ void TagDetector::process(const cv::Mat& orig,
     emitDebugImage(debugWindowName, 
                    4, 0, debugNumberFiles,
                    "Clusters", 
-                   m, ScaleNone);
+                   m, ScaleNone, true);
 
   }
 
-  END_PROFILE(step4_time);
+  END_PROFILE(4,0);
 
   ///////////////////////////////////////////////////////////
   // Step five. Loop over the clusters, fitting lines (which we
   // call Segments).
 
-  START_PROFILE(step5_time, "fit lines to clusters");
+  START_PROFILE(5,0, "fit lines to clusters");
 
   SegmentArray segments;
 
@@ -816,10 +1052,10 @@ void TagDetector::process(const cv::Mat& orig,
     }
 
     if (params.segDecimate) {
-      seg->x0 = 2*seg->x0 + .5;
-      seg->y0 = 2*seg->y0 + .5;
-      seg->x1 = 2*seg->x1 + .5;
-      seg->y1 = 2*seg->y1 + .5;
+      seg->x0 = 2*seg->x0;
+      seg->y0 = 2*seg->y0;
+      seg->x1 = 2*seg->x1;
+      seg->y1 = 2*seg->y1;
       seg->length *= 2;
     }
 
@@ -827,10 +1063,10 @@ void TagDetector::process(const cv::Mat& orig,
 
   }
 
-  END_PROFILE(step5_time);
+  END_PROFILE(5,0);
 
   if (debug) {
-    cv::Mat rgbu = rgbOrig / 2 + 127;
+    cv::Mat rgbu = images.origRGB / 2 + 127;
     const ScalarVec& ccolors = getCColors();
     for (size_t i=0; i<segments.size(); ++i) {
       const Segment* seg = segments[i];
@@ -843,10 +1079,10 @@ void TagDetector::process(const cv::Mat& orig,
     emitDebugImage(debugWindowName, 
                    5, 0, debugNumberFiles,
                    "Segmented", 
-                   rgbu, ScaleNone);
+                   rgbu, ScaleNone, true);
   }
 
-  int width = fim.cols, height = fim.rows;
+  int width = images.fim.cols, height = images.fim.rows;
   
   ////////////////////////////////////////////////////////////////
   // Step six. For each segment, find segments that begin where
@@ -854,7 +1090,7 @@ void TagDetector::process(const cv::Mat& orig,
   // next...) The gridder accelerates the search by building
   // (essentially) a 2D hash table.
 
-  START_PROFILE(step6_time, "find children");
+  START_PROFILE(6,0, "find children");
 
   Gridder gridder(0, 0, width, height, 10);
   for (size_t i=0; i<segments.size(); ++i) {
@@ -897,349 +1133,260 @@ void TagDetector::process(const cv::Mat& orig,
     }
   }
 
-  END_PROFILE(step6_time);
+  END_PROFILE(6,0);
 
   ////////////////////////////////////////////////////////////////
   // Step seven. Search all connected segments to see if any
   // form a loop of length 4. Add those to the quads list.
 
-  START_PROFILE(step7_time, "build quads");
+  START_PROFILE(7,0, "build quads");
   
-  QuadArray quads;
-
   Segment* path[5];
 
   for (size_t i=0; i<segments.size(); ++i) {
     Segment* seg = segments[i];
     path[0] = seg;
-    search(opticalCenter, quads, path, seg, 0);
+    search(images.opticalCenter, quads, path, seg, 0);
+  }
+
+  while (!segments.empty()) {
+    delete segments.back();
+    segments.pop_back();
+  }
+
+  END_PROFILE(7,0);
+
+}
+
+void TagDetector::makeImages(const cv::Mat& orig, 
+                             const at::Point& opticalCenter,
+                             Images& images) const {
+
+  images.orig = orig;
+
+  images.opticalCenter = opticalCenter;
+
+  if (debug) { 
+    emitDebugImage(debugWindowName, 
+                   0, 0, debugNumberFiles,
+                   "Orig", 
+                   orig, ScaleNone, true); 
+  }
+
+  // This is a very long function, but it can't really be
+  // factored any more simply: it's just a long sequence of
+  // sequential operations.
+
+  ///////////////////////////////////////////////////////////
+  // Step one. Preprocess image (convert to float (grayscale)
+  // and low pass if necessary.)
+
+  START_PROFILE(1, 0, "preprocess images");
+
+  if (orig.channels() == 1) {
+    images.origBW = orig;
+  } else {
+    cv::cvtColor(orig, images.origBW, cv::COLOR_RGB2GRAY);
+  }
+
+  if (params.newQuadAlgorithm || params.refineQuads || params.refineBad) {
+    
+    if (images.origBW.depth() == CV_8U) {
+      images.origBW8 = images.origBW;
+    } else {
+      images.origBW.convertTo(images.origBW8, CV_8U, 255);
+    }
+
+    if (params.refineQuads || params.refineBad) {
+      
+      cv::Sobel( images.origBW8, images.gx, at::IMAGE_TYPE, 1, 0 );
+      cv::Sobel( images.origBW8, images.gy, at::IMAGE_TYPE, 0, 1 );
+      
+      images.gx *= 0.25;
+      images.gy *= 0.25;
+
+    }
+
+  }
+
+  if (orig.depth() != at::IMAGE_TYPE) {
+    images.origBW.convertTo(images.fimOrig, at::IMAGE_TYPE, 1.0/255);
+  } else {
+    images.fimOrig = images.origBW;
+  }
+
+
+  if (params.sigma > 0) {
+    cv::GaussianBlur(images.fimOrig, images.fim, cv::Size(0,0), params.sigma);
+    if (debug) { 
+      emitDebugImage(debugWindowName, 
+                     1, 0, debugNumberFiles,
+                     "Blur", 
+                     images.fim, ScaleNone, true); 
+    }
+  } else {
+    images.fim = images.fimOrig;
   }
 
   if (debug) {
-    std::cout << "got " << quads.size() << " quads\n";
-    cv::Mat rgbu = rgbOrig / 2 + 127;
-    const ScalarVec& ccolors = getCColors();
-    for (size_t i=0; i<quads.size(); ++i) {
-      const Quad& q = *(quads[i]);
-      cv::Point2i p[4];
-      std::cout << "quad " << i << ":\n";
-      for (int j=0; j<4; ++j) { 
-        p[j] = q.p[j]; 
-        std::cout << "  " << p[j].x << ", " << p[j].y << "\n";
-      }
-      const cv::Scalar& color = ccolors[ i % ccolors.size() ];
-      const cv::Point2i* pp = p;
-      int n = 4;
-      //cv::fillPoly( rgbu, &pp, &n, 1, color, CV_AA );
-      cv::polylines(rgbu, &pp, &n, 1, true, color, 1, CV_AA);
+    cv::Mat rgb;
+    if (images.orig.channels() == 3) {
+      rgb = images.orig;
+    } else {
+      cv::cvtColor(images.orig, rgb, cv::COLOR_GRAY2RGB);
     }
-    emitDebugImage(debugWindowName, 
-                   7, 0, debugNumberFiles,
-                   "Quads", 
-                   rgbu, ScaleNone);
+    if (rgb.depth() != CV_8U) {
+      at::real scl = 1;
+      if (rgb.depth() == CV_32F || rgb.depth() == CV_64F) {
+        scl = 255;
+      }
+      rgb.convertTo(images.origRGB, scl);
+    } else {
+      images.origRGB = rgb;
+    }
+  }
+  
+  END_PROFILE(1,0);
+
+}
+
+void TagDetector::process(const cv::Mat& orig,
+                          const at::Point& opticalCenter,
+                          TagDetectionArray& detections) const {
+
+  if (num_iterations < 0) { initTimers(); }
+
+  START_PROFILE(0,0, "overall time");
+
+  Images images;
+
+  makeImages(orig, opticalCenter, images);
+
+  QuadArray quads;
+
+  if (params.newQuadAlgorithm) {
+    getQuads_MZ(images, quads);
+  } else {
+    getQuads_AT(images, quads);
   }
 
-  END_PROFILE(step7_time);
+  if (debug) { debugShowQuads(images, quads, 7, "Quads"); }
 
-  ////////////////////////////////////////////////////////////////
-  // Step seven - extra. Try to use corner detection to improve
-  // corner points for quads.
+  if (params.refineQuads) {
+    refineQuads_MZ(images, quads);
+    if (debug) { debugShowQuads(images, quads, 8, "Refined quads"); }
+  } 
 
-  START_PROFILE(step7b_time, "fix quad corners");
+  decode(images, quads, detections);
 
-  if (params.refineCorners) {
-    if (debug) {
-      std::cout << "\n\nFIXING CORNERS\n\n\n";
-    }
-    cv::Mat& fimcorner = origbw;
-    const int region_radius = (params.cornerSearchRadius +
-                               (params.cornerBlockSize + 1) / 2);
-    const int region_width = 2 * region_radius + 1;
-    const cv::Point2i region_center(region_radius, region_radius);
-    const cv::Size region_size(region_width, region_width);
-    const cv::Rect region_template(-region_center, region_size);
-    const cv::Rect image_rect(cv::Point2i(0, 0), fimcorner.size());
-    cv::Mat whole_masks = cv::Mat::zeros(fimcorner.size(), CV_8UC1);
-    cv::Mat mask = cv::Mat::zeros(region_size, CV_8UC1);
-    cv::circle(mask, region_center, params.cornerSearchRadius, 1.0, -1);
-
-    QuadArray new_quads;
-    for (size_t i = 0; i < quads.size(); ++i) {
-      Quad& q = *(quads[i]);
-      at::Point p[4];
-      for (int j = 0; j < 4; ++j) {
-        cv::Point2i curr_corner = p[j] = q.p[j];
-        if (debug) {
-          std::cout << "Processing corner: " << curr_corner << "\n";
-        }
-        cv::Rect region_rect = (region_template + curr_corner) & image_rect;
-        if (region_rect.size().area() == 0) continue;
-
-        cv::Mat image_region = fimcorner(region_rect);
-        cv::Rect mask_rect = region_rect - curr_corner + region_center;
-        cv::Mat clipped_mask = mask(mask_rect);
-        cv::Mat corner_response;
-        if (debug) {
-          std::cout << "Region: " << image_region.size().width << "x"
-                    << image_region.size().height << " "
-                    << "Mask: " << clipped_mask.size().width << "x"
-                    << clipped_mask.size().height << " "
-                    << "Template: " << region_template.size().width << "x"
-                    << region_template.size().height << "\n";
-        }
-        assert(image_region.size() == clipped_mask.size());
-        cv::cornerMinEigenVal(image_region, corner_response,
-                              params.cornerBlockSize);
-        cv::Point2i best_corner;
-        cv::minMaxLoc(corner_response, NULL, NULL, NULL, &best_corner,
-                      clipped_mask);
-        if (params.refineCornersSubPix) {
-          std::vector<cv::Point2f> corners(1, best_corner);
-          const cv::Size search_size(params.cornerSearchRadius,
-                                     params.cornerSearchRadius);
-          // Undocumented restriction of cornerSubPix... grr.
-          cv::Size min_size = search_size * 2 + cv::Size(5, 5);
-          if (image_region.size().width >= min_size.width &&
-              image_region.size().height >= min_size.height) {
-            const cv::Size kNoZeroZone(-1, -1);
-            cv::TermCriteria crit(cv::TermCriteria::MAX_ITER |
-                                  cv::TermCriteria::EPS, 10, 0.1);
-            cv::cornerSubPix(image_region, corners, search_size, kNoZeroZone,
-                             crit);
-            best_corner = corners.front();
-          }
-        }
-        p[j] = best_corner - region_center + curr_corner;
-        whole_masks(region_rect) = cv::max(whole_masks(region_rect),
-                                           clipped_mask);
-      }
-      new_quads.push_back(new Quad(p, q.opticalCenter, q.observedPerimeter));
-    }
-
-    if (debug) {
-      std::cout << "\nFIXED CORNER QUADS\n";
-      cv::Mat rgbu = rgbOrig / 2 + 127;
-      const ScalarVec& ccolors = getCColors();
-      for (size_t i=0; i<new_quads.size(); ++i) {
-        const Quad& q = *(new_quads[i]);
-        cv::Point2i p[4];
-        std::cout << "quad " << i << ":\n";
-        for (int j=0; j<4; ++j) {
-          p[j] = q.p[j];
-          std::cout << "  " << p[j].x << ", " << p[j].y << "\n";
-        }
-        const cv::Scalar& color = ccolors[ i % ccolors.size() ];
-        const cv::Point2i* pp = p;
-        int n = 4;
-        //cv::fillPoly( rgbu, &pp, &n, 1, color, CV_AA );
-        cv::polylines(rgbu, &pp, &n, 1, true, color, 1, CV_AA);
-      }
-      std::string extra = "";
-      if (params.refineCornersSubPix) extra += "-SubPix";
-      emitDebugImage(debugWindowName,
-                     7, 1, debugNumberFiles,
-                     std::string("Fix-Corners") + extra,
-                     rgbu, ScaleNone);
-
-      const double kBackgroundFade = 1.0 / 8;
-      cv::Mat rgb_background = rgbOrig * kBackgroundFade;
-      cv::Mat rgb_remainder = rgbOrig * (1 - kBackgroundFade);
-      cv::Mat mask_display;
-      rgb_remainder.copyTo(mask_display, whole_masks);
-      mask_display += rgb_background;
-      emitDebugImage(debugWindowName, 7, 2, debugNumberFiles,
-                     "Corners Masks", mask_display, ScaleNone);
-      double max;
-      cv::Mat whole_response;
-      cv::cornerMinEigenVal(fimcorner, whole_response, params.cornerBlockSize);
-      cv::minMaxLoc(whole_response, NULL, &max);
-      whole_response *= 255 / max;
-      emitDebugImage(debugWindowName, 7, 3, debugNumberFiles,
-                     "Corners MinEigenVal", whole_response, ScaleNone);
-      const int kSobelApertureValue = 3;
-      const double kHarrisFreeParameter = 0.04;
-      cv::cornerHarris(fimcorner, whole_response, params.cornerBlockSize,
-                       kSobelApertureValue, kHarrisFreeParameter);
-      cv::minMaxLoc(whole_response, NULL, &max);
-      whole_response *= 255 / max;
-      emitDebugImage(debugWindowName, 7, 4, debugNumberFiles,
-                     "Corners Harris", whole_response, ScaleNone);
-    }
-
-    // Add the newly "fixed" quads as alternate candidates to the
-    // original candidate quads (over-detection is unlikely).
-    quads.insert(quads.end(), new_quads.begin(), new_quads.end());
+  while (!quads.empty()) {
+    delete quads.back();
+    quads.pop_back();
   }
 
+  END_PROFILE(0,0);
 
-  END_PROFILE(step7b_time);
+}
+
+void TagDetector::debugShowQuads(const Images& images,
+                                 const QuadArray& quads,
+                                 int step, const std::string& label) const {
+
+  cv::Mat rgbu = images.origRGB / 2 + 127;
+
+  int scl = resizeToDisplay(rgbu, rgbu);
+
+  const ScalarVec& ccolors = getCColors();
+
+  for (size_t i=0; i<quads.size(); ++i) {
+    const Quad& quad = *(quads[i]);
+    cv::Scalar color = ccolors[ i % ccolors.size() ];
+    for (int j=0; j<4; ++j) {
+      cv::line( rgbu, scl*quad.p[j], scl*quad.p[(j+1)%4], color, 1, CV_AA);
+    }
+  }
+
+  emitDebugImage(debugWindowName,
+                 step, 0, debugNumberFiles,
+                 label,
+                 rgbu,
+                 ScaleNone, false);
+  
+  /*
+
+  for (size_t i=0; i<quads.size(); ++i) {
+
+    const Quad& quad = *(quads[i]);
+
+    cv::Mat_<cv::Vec3b> rgbu = images.origRGB * 0.5 + 127;
+
+    cv::Rect rect = boundingRect(quad.p, rgbu.size());
+    int border = 3;
+
+    cv::Mat small = subimageWithBorder(rgbu, rect, border);
+
+    at::Point delta = at::Point(border-rect.x, border-rect.y);
+
+    cv::Mat big;
+    at::real scl = resizeToDisplay(small, big);
+
+    for (int i=0; i<4; ++i) {
+      cv::line(big, (quad.p[i]+delta)*scl, (quad.p[(i+1)%4]+delta)*scl, 
+               CV_RGB(255,0,0), 1, CV_AA);
+    }
+
+    emitDebugImage(debugWindowName,
+                   step, i, debugNumberFiles,
+                   "Quad",
+                   big,
+                   ScaleNone, false);
+
+  }
+  */
+
+}
+
+void TagDetector::decode(const Images& images, 
+                         const QuadArray& quads,
+                         TagDetectionArray& detections) const {
 
   ////////////////////////////////////////////////////////////////
   // Step eight. Decode the quads. For each quad, we first
   // estimate a threshold color to decided between 0 and
   // 1. Then, we read off the bits and see if they make sense.
 
-  START_PROFILE(step8_time, "decode quads");
+  START_PROFILE(8, 0, "decode quads");
 
   detections.clear();
-  
+
   for (size_t i=0; i<quads.size(); ++i) {
 
-    const Quad& quad = *(quads[i]);
+    Quad& quad = *(quads[i]);
 
-    GrayModel blackModel, whiteModel;
+    bool good = decodeQuad(images, quad, i, detections);
 
-    // sample points around the black and white border in
-    // order to calibrate our gray threshold. This code is
-    // simpler if we loop over the whole rectangle and discard
-    // the points we don't want.
-    int dd = 2*tagFamily.blackBorder + tagFamily.d;
-    
-    for (int iy = -1; iy <= dd; iy++) {
-      for (int ix = -1; ix <= dd; ix++) {
+    if (!good && params.refineBad && !params.refineQuads) {
 
-        at::real y = (iy + .5) / dd;
-        at::real x = (ix + .5) / dd;
-        
-        at::Point pxy = quad.interpolate01(x, y);
-        int irx = (int) (pxy.x+.5);
-        int iry = (int) (pxy.y+.5);
-        
-        if (irx < 0 || irx >= width || iry < 0 || iry >= height) {
-          continue;
-        }
-        
-        at::real v = fim(iry, irx);
-        
-        if ((iy == -1 || iy == dd) || (ix == -1 || ix == dd)) {
-          // part of the outer white border.
-          whiteModel.addObservation(x, y, v);
-        } else if ((iy == 0 || iy == (dd-1)) || (ix == 0 || ix == (dd-1))) {
-          // part of the outer black border.
-          blackModel.addObservation(x, y, v);
-        }
-
-      }
-    }
-
-    if (debug) {
+      START_PROFILE(8, 1, "refine bad");
       
-      GrayModel* models[2];
-      models[0] = &whiteModel;
-      models[1] = &blackModel;
+      refineQuad( images.origBW8, 
+                  images.gx, images.gy, 
+                  quad.p, tpoints, 
+                  refine_debug,
+                  refine_max_iter,
+                  refine_max_grad );
 
-      const char* names[2] = { "white", "black" };
+      quad.recomputeHomography();
 
-      for (int m=0; m<2; ++m) {
-	GrayModel* model = models[m];
-	model->compute();
-	at::Mat Amat(4, 4, &(model->A[0][0]));
-	at::Mat bvec(4, 1, model->b);
-	at::Mat xvec(4, 1, model->X);
-	std::cout << "for quad " << i << ", model " << names[m] << ":\n";
-	std::cout << "  A =\n" << Amat << "\n";
-	std::cout << "  b = " << bvec << "\n";
-	std::cout << "  x = " << xvec << "\n";
-      }
+      END_PROFILE(8, 1);
 
-
-
+      decodeQuad(images, quad, i, detections);
+      
     }
 
-    bool bad = false;
-    TagFamily::code_t tagCode = 0;
-
-    if (debug) { std::cout << "\n"; }
-
-    // Try reading off the bits.
-    // XXX: todo: multiple samples within each cell and vote?
-    for (uint iy = tagFamily.d-1; iy < tagFamily.d; iy--) {
-
-      if (debug) { std::cout << "  "; }
-
-      for (uint ix = 0; ix < tagFamily.d; ix++) {
-
-        at::real y = (tagFamily.blackBorder + iy + .5) / dd;
-        at::real x = (tagFamily.blackBorder + ix + .5) / dd;
-
-        at::Point pxy = quad.interpolate01(x, y);
-        int irx = (int) (pxy.x+.5);
-        int iry = (int) (pxy.y+.5);
-
-        if (irx < 0 || irx >= width || iry < 0 || iry >= height) {
-	  if (debug) { std::cout << "quad " << i << " was bad!\n"; }
-          bad = true;
-          continue;
-        }
-
-        at::real threshold = (blackModel.interpolate(x, y) + 
-                            whiteModel.interpolate(x,y))*.5;
-
-        at::real v = fim(iry, irx);
-
-        tagCode = tagCode << TagFamily::code_t(1);
-
-        if (v > threshold) {
-          tagCode |= TagFamily::code_t(1);
-        }
-
-	if (debug) {
-	  std::cout << ((v > threshold) ? "##" : "  ");
-	}
-
-      }
-
-      if (debug) { std::cout << "\n"; }
-
-    }
-
-    if (debug) { std::cout << "\n"; }
-
-    if (!bad) {
-
-      if (debug) {
-	std::cout << "for quad " << i << " got tagCode " << tagCode << "\n";
-      }
-
-      TagDetection d;
-      tagFamily.decode(d, tagCode);
-
-      // rotate points in detection according to decoded
-      // orientation. Thus the order of the points in the
-      // detection object can be used to determine the
-      // orientation of the target.
-
-      for (int i = 0; i < 4; i++) {
-        d.p[(4+i-d.rotation)%4] = quad.p[i];
-      }
-
-      // compute the homography (and rotate it appropriately)
-      d.homography = quad.H;
-      d.hxy = quad.opticalCenter;
-
-      if (true) {
-        at::real c = cos(d.rotation*M_PI/2.0);
-        at::real s = sin(d.rotation*M_PI/2.0);
-        at::real R[9] = { 
-          c, -s, 0, 
-          s,  c, 0, 
-          0,  0, 1 
-        };
-        at::Mat Rmat(3, 3, R);
-        d.homography = d.homography * Rmat;
-      }
-
-      if (d.good) {
-        d.cxy = quad.interpolate01(.5, .5);
-        d.observedPerimeter = quad.observedPerimeter;
-        detections.push_back(d);
-      }
-
-    }
-    
   }
 
-  END_PROFILE(step8_time);
+  END_PROFILE(8,0);
 
   ////////////////////////////////////////////////////////////////
   // Step nine. Some quads may be detected more than once, due
@@ -1249,7 +1396,7 @@ void TagDetector::process(const cv::Mat& orig,
   // the error is the same, the one with the greatest observed
   // perimeter.
 
-  START_PROFILE(step9_time, "refine detections");
+  START_PROFILE(9,0, "remove overlaps");
 
   TagDetectionArray goodDetections;
 
@@ -1294,23 +1441,203 @@ void TagDetector::process(const cv::Mat& orig,
 
   goodDetections.swap(detections);
 
-  END_PROFILE(step9_time);
+  END_PROFILE(9,0);
 
-  START_PROFILE(cleanup_time, "cleanup allocations");
-  
-  while (!segments.empty()) {
-    delete segments.back();
-    segments.pop_back();
+}
+
+bool TagDetector::decodeQuad(const Images& images, 
+                             const Quad& quad, size_t i,
+                             TagDetectionArray& detections) const {
+
+  int width = images.fim.cols, height = images.fim.rows;
+
+  GrayModel blackModel, whiteModel;
+
+  // sample points around the black and white border in
+  // order to calibrate our gray threshold. This code is
+  // simpler if we loop over the whole rectangle and discard
+  // the points we don't want.
+  int dd = 2*tagFamily.blackBorder + tagFamily.d;
+
+  std::vector< cv::Point > bpoints, wpoints;
+
+  for (int iy = -1; iy <= dd; iy++) {
+    for (int ix = -1; ix <= dd; ix++) {
+
+      at::real y = (iy + .5) / dd;
+      at::real x = (ix + .5) / dd;
+
+      at::Point pxy = interpolate(quad.p, at::Point(x,y));
+      at::real v = bicubicInterpolate( images.fim, pxy );
+        
+      if (pxy.x < 0 || pxy.x >= width || pxy.y < 0 || pxy.y >= height) {
+        continue;
+      }
+        
+      if ((iy == -1 || iy == dd) || (ix == -1 || ix == dd)) {
+        // part of the outer white border.
+        whiteModel.addObservation(x, y, v);
+        if (debug) { wpoints.push_back(pxy); }
+      } else if ((iy == 0 || iy == (dd-1)) || (ix == 0 || ix == (dd-1))) {
+        // part of the outer black border.
+        blackModel.addObservation(x, y, v);
+        if (debug) { bpoints.push_back(pxy); }
+      }
+
+    }
   }
 
-  while (!quads.empty()) {
-    delete quads.back();
-    quads.pop_back();
+  if (debug) {
+      
+    GrayModel* models[2];
+    models[0] = &whiteModel;
+    models[1] = &blackModel;
+
+    const char* names[2] = { "white", "black" };
+
+    for (int m=0; m<2; ++m) {
+      GrayModel* model = models[m];
+      model->compute();
+      at::Mat Amat(4, 4, &(model->A[0][0]));
+      at::Mat bvec(4, 1, model->b);
+      at::Mat xvec(4, 1, model->X);
+      std::cout << "for quad " << i << ", model " << names[m] << ":\n";
+      std::cout << "  A =\n" << Amat << "\n";
+      std::cout << "  b = " << bvec << "\n";
+      std::cout << "  x = " << xvec << "\n";
+    }
+
+
+
   }
 
-  END_PROFILE(cleanup_time);
+  bool bad = false;
+  TagFamily::code_t tagCode = 0;
 
-  END_PROFILE(total_time);
+  if (debug) { std::cout << "\n"; }
+
+  // Try reading off the bits.
+  // XXX: todo: multiple samples within each cell and vote?
+  for (uint iy = tagFamily.d-1; iy < tagFamily.d; iy--) {
+
+    if (debug) { std::cout << "  "; }
+
+    for (uint ix = 0; ix < tagFamily.d; ix++) {
+
+      at::real y = (tagFamily.blackBorder + iy + .5) / dd;
+      at::real x = (tagFamily.blackBorder + ix + .5) / dd;
+
+      at::Point pxy = interpolate(quad.p, at::Point(x,y));
+      at::real v = bicubicInterpolate( images.fim, pxy );
+
+      if (pxy.x < 0 || pxy.x >= width || pxy.y < 0 || pxy.y >= height) {
+        if (debug) { std::cout << "quad " << i << " was bad!\n"; }
+        bad = true;
+        continue;
+      }
+
+      at::real threshold = (blackModel.interpolate(x, y) + 
+                            whiteModel.interpolate(x, y))*.5;
+
+      tagCode = tagCode << TagFamily::code_t(1);
+
+      if (v > threshold) {
+        tagCode |= TagFamily::code_t(1);
+        if (debug) { wpoints.push_back(pxy); }
+      } else {
+        if (debug) { bpoints.push_back(pxy); }
+      }
+
+      if (debug) {
+        std::cout << ((v > threshold) ? "##" : "  ");
+      }
+
+    }
+
+    if (debug) { std::cout << "\n"; }
+
+  }
+
+
+  if (debug) { std::cout << "\n"; }
+
+  if (!bad) {
+
+
+    TagDetection d;
+    tagFamily.decode(d, tagCode);
+
+    if (debug) {
+
+      std::cout << "for quad " << i << " got tagCode " << tagCode << "\n";
+      std::cout << "closest tag is " << d.code << " and good is " << d.good << "\n";
+
+      cv::Mat rgbu = images.origRGB / 2 + 127;
+
+      cv::Point delta(0,0);
+
+        
+      for (size_t k=0; k<bpoints.size(); ++k) {
+        cv::Point pk = bpoints[k];
+        cv::rectangle(rgbu,
+                      pk - delta, pk + delta,
+                      CV_RGB(0,0,0), 1, 4);
+          
+      }
+
+      for (size_t k=0; k<wpoints.size(); ++k) {
+        cv::Point pk = wpoints[k];
+        cv::rectangle(rgbu,
+                      pk - delta, pk + delta,
+                      CV_RGB(255,255,255), 1, 4);
+      }
+
+      if (0) {
+        emitDebugImage(debugWindowName,
+                       8, i, debugNumberFiles,
+                       "Decode",
+                       rgbu,
+                       ScaleNone, true);
+      }
+
+    }
+
+
+    // rotate points in detection according to decoded
+    // orientation. Thus the order of the points in the
+    // detection object can be used to determine the
+    // orientation of the target.
+
+    for (int i = 0; i < 4; i++) {
+      d.p[(4+i-d.rotation)%4] = quad.p[i];
+    }
+
+    // compute the homography (and rotate it appropriately)
+    d.homography = quad.H;
+    d.hxy = quad.opticalCenter;
+
+    if (true) {
+      at::real c = cos(d.rotation*M_PI/2.0);
+      at::real s = sin(d.rotation*M_PI/2.0);
+      at::real R[9] = { 
+        c, -s, 0, 
+        s,  c, 0, 
+        0,  0, 1 
+      };
+      at::Mat Rmat(3, 3, R);
+      d.homography = d.homography * Rmat;
+    }
+
+    if (d.good) {
+      d.cxy = interpolate(quad.p, at::Point(0.5, 0.5));
+      d.observedPerimeter = quad.observedPerimeter;
+      detections.push_back(d);
+      return true;
+    }
+
+  }
+
+  return false;
 
 }
 

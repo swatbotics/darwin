@@ -6,8 +6,9 @@ if (( $# >= 1 )); then
     shift 1
     # Make sure we can find the command first.
     if which "$COMMAND" >/dev/null; then
-	# Run sudo, using which to locate the command's real path.
-	sudo "$(which "$COMMAND")" "$@"
+	# Run sudo, using which to locate the command's real path,
+	# and pass -E so that environment variables are preserved.
+	sudo -E "$(which "$COMMAND")" "$@"
     else
 	echo "Could not find command - is it a builtin?"
 	exit 1
