@@ -52,18 +52,22 @@ struct Quad {
 
   at::real observedPerimeter;
 
-
   Quad();
 
   Quad(const at::Point p[4],
        const at::Point& opticalCenter,
        at::real observedPerimeter);
 
+  void recomputeHomography();
+
   at::Point interpolate(const at::Point& p) const;
   at::Point interpolate(at::real x, at::real y) const;
 
+
   at::Point interpolate01(const at::Point& p) const;
   at::Point interpolate01(at::real x, at::real y) const;
+
+                          
 
 };
 
@@ -83,23 +87,11 @@ struct GLineSegment2D {
 
 };
 
+bool intersect(const GLineSegment2D& s1, const GLineSegment2D& s2, at::Point& pinter);
+
 GLineSegment2D lsqFitXYW(const XYWArray& points);
 
-enum ScaleType {
-  ScaleNone,
-  ScaleMinMax,
-  ScaleAbs
-};
 
-cv::Mat rescaleImage(const cv::Mat& img, ScaleType type);
 
-void labelImage(cv::Mat& img, const std::string& text);
-
-void labelAndWaitForKey(const std::string& window,
-                        const std::string& text, 
-                        const cv::Mat& img, 
-                        ScaleType type);
-
-                        
 
 #endif

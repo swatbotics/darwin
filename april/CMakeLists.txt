@@ -14,11 +14,21 @@ link_directories(${OPENCV_LIBRARY_DIRS})
 
 include_directories(${GFLAGS_INCLUDE_DIRS})
 
+if (${CGAL_LIBRARY-NOTFOUND})
+  set(AT_LIBS apriltagcpp ${OPENCV_LIBRARIES})
+else (${CGAL_LIBRARY-NOTFOUND})
+  set(AT_LIBS apriltagcpp ${OPENCV_LIBRARIES} ${CGAL_LIBRARY})
+  add_definitions("-DHAVE_CGAL")
+endif (${CGAL_LIBRARY-NOTFOUND})
+
+
 add_library(apriltagcpp 
   CameraUtil.cpp
+  DebugImage.cpp
   Geometry.cpp 
   GrayModel.cpp
   MathUtil.cpp 
+  Refine.cpp
   TagDetector.cpp 
   TagFamily.cpp
   TagFamilies.cpp
@@ -26,18 +36,21 @@ add_library(apriltagcpp
 )
 
 add_executable(camtest camtest.cpp)
-target_link_libraries(camtest apriltagcpp ${OPENCV_LIBRARIES} gflags)
+target_link_libraries(camtest ${AT_LIBS} gflags)
 
 add_executable(tagtest tagtest.cpp)
-target_link_libraries(tagtest apriltagcpp ${OPENCV_LIBRARIES})
+target_link_libraries(tagtest ${AT_LIBS})
+
+add_executable(quadtest quadtest.cpp)
+target_link_libraries(quadtest ${AT_LIBS})
 
 add_executable(calibrate calibrate.cpp)
-target_link_libraries(calibrate apriltagcpp ${OPENCV_LIBRARIES} gflags)
+target_link_libraries(calibrate ${AT_LIBS} gflags)
 
 add_executable(maketags maketags.cpp)
-target_link_libraries(maketags apriltagcpp ${CAIRO_LIBRARIES} ${OPENCV_LIBRARIES})
+target_link_libraries(maketags ${CAIRO_LIBRARIES} ${AT_LIBS})
 
 if (GLUT_LIBRARY)
 add_executable(gltest gltest.cpp)
-target_link_libraries(gltest apriltagcpp ${GLUT_LIBRARY} ${OPENGL_LIBRARIES} ${OPENCV_LIBRARIES})
+target_link_libraries(gltest ${GLUT_LIBRARY} ${OPENGL_LIBRARIES} ${AT_LIBS})
 endif (GLUT_LIBRARY)

@@ -297,10 +297,12 @@ cv::Mat TagFamily::superimposeDetections(const cv::Mat& image,
 
 cv::Mat TagFamily::detectionImage(const TagDetection& det,
                                   const cv::Size& size, 
-                                  int type) const {
+                                  int type,
+                                  const cv::Scalar& bgcolor) const {
 
 
   cv::Mat dst(size, type);
+
 
   cv::Mat im = makeImage(det.id);
 
@@ -321,7 +323,9 @@ cv::Mat TagFamily::detectionImage(const TagDetection& det,
   }
 
   cv::Mat W = getWarp(det);
-  cv::warpPerspective(im, dst, W, size, CV_INTER_NN);
+  cv::warpPerspective(im, dst, W, size, CV_INTER_NN, cv::BORDER_CONSTANT, bgcolor);
+
+  
 
   return dst;
 

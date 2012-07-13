@@ -10,6 +10,8 @@ pkg_check_modules(CAIRO REQUIRED cairo)
 pkg_search_module(OPENCV REQUIRED opencv>=2.3 opencv-2.3.1)
 pkg_check_modules(SDL sdl)
 
+find_library(CGAL_LIBRARY cgal)
+
 if (APPLE)
 find_library(OPENGL_LIBRARY OpenGL)
 find_library(GLUT_LIBRARY Glut)

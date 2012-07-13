@@ -5,6 +5,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "TagDetector.h"
+#include "DebugImage.h"
 
 #define DEFAULT_TAG_FAMILY "Tag36h11"
 
@@ -31,6 +32,9 @@ typedef struct TagTestOptions {
 
 
 void print_usage(const char* tool_name, FILE* output=stderr) {
+
+  TagDetectorParams p;
+
   fprintf(output, "\
 Usage: %s [OPTIONS] IMAGE1 [IMAGE2 ...]\n\
 Run a tool to test tag detection. Options:\n\
@@ -42,20 +46,19 @@ Run a tool to test tag detection. Options:\n\
  -x              Do not generate any non-debug visuals.\n\
  -o              Generate debug visuals as output files vs. using X11.\n\
  -D              Use decimation for segmentation stage.\n\
+ -S SIGMA        Set the original image sigma value (default %.2f).\n\
  -s SEGSIGMA     Set the segmentation sigma value (default %.2f).\n\
  -a THETATHRESH  Set the theta threshold for clustering (default %.1f).\n\
  -m MAGTHRESH    Set the magnitude threshold for clustering (default %.1f).\n\
- -c              Re-detect quad corners to improve accuracy.\n\
- -C              Re-re-detect quad corners with subpixel accuracy.\n\
- -b              Set the block size for corner detection (default %d).\n\
- -r              Set the search radius for corner detection (default %d).\n\
+ -b              Refine bad quads using template tracker.\n\
+ -r              Refine all quads using template tracker.\n\
+ -n              Use the new quad detection algorithm.\n\
  -f FAMILY       Look for the given tag family (default \"%s\")\n",
           tool_name,
-          TagDetectorParams::kDefaultSegSigma,
-          TagDetectorParams::kDefaultThetaThresh,
-          TagDetectorParams::kDefaultMagThresh,
-          TagDetectorParams::kDefaultCornerBlockSize,
-          TagDetectorParams::kDefaultCornerSearchRadius,
+          p.sigma,
+          p.segSigma,
+          p.thetaThresh,
+          p.magThresh,
           DEFAULT_TAG_FAMILY);
 
   fprintf(output, "Known tag families:");
@@ -68,7 +71,7 @@ Run a tool to test tag detection. Options:\n\
 
 TagTestOptions parse_options(int argc, char** argv) {
   TagTestOptions opts;
-  const char* options_str = "hdtRvxoDs:a:m:cCb:r:f:";
+  const char* options_str = "hdtRvxoDS:s:a:m:brnf:";
   int c;
   while ((c = getopt(argc, argv, options_str)) != -1) {
     switch (c) {
@@ -81,13 +84,13 @@ TagTestOptions parse_options(int argc, char** argv) {
       case 'x': opts.no_images = true; break;
       case 'o': opts.generate_output_files = true; break;
       case 'D': opts.params.segDecimate = true; break;
+      case 'S': opts.params.sigma = atof(optarg); break;
       case 's': opts.params.segSigma = atof(optarg); break;
       case 'a': opts.params.thetaThresh = atof(optarg); break;
       case 'm': opts.params.magThresh = atof(optarg); break;
-      case 'c': opts.params.refineCorners = true; break;
-      case 'C': opts.params.refineCornersSubPix = true; break;
-      case 'b': opts.params.cornerBlockSize = atoi(optarg); break;
-      case 'r': opts.params.cornerSearchRadius = atoi(optarg); break;
+      case 'b': opts.params.refineBad = true; break;
+      case 'r': opts.params.refineQuads = true; break;
+      case 'n': opts.params.newQuadAlgorithm = true; break;
       case 'f': opts.family_str = optarg; break;
       default:
         fprintf(stderr, "\n");
@@ -97,9 +100,6 @@ TagTestOptions parse_options(int argc, char** argv) {
   }
   if (opts.be_verbose) {
     opts.show_debug_info = opts.show_timing = opts.show_results = true;
-  }
-  if (opts.params.refineCornersSubPix) {
-    opts.params.refineCorners = true;
   }
   return opts;
 }
@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
     cv::Point2d opticalCenter(0.5*src.rows, 0.5*src.cols);
 
     if (!detector.debug && !opts.no_images) {
-      labelAndWaitForKey(win, "Original", src, ScaleNone);
+      labelAndWaitForKey(win, "Original", src, ScaleNone, true);
     }
 
     clock_t start = clock();
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
     }
     if (!opts.no_images) {
       cv::Mat img = family.superimposeDetections(src, detections);
-      labelAndWaitForKey(win, "Detected", img, ScaleNone);
+      labelAndWaitForKey(win, "Detected", img, ScaleNone, true);
     }
   }
 

@@ -69,6 +69,28 @@ void Gridder::find(at::real x, at::real y, at::real range, SegmentArray& results
 
 }
 
+bool intersect(const GLineSegment2D& g1,
+               const GLineSegment2D& g2,
+               at::Point& pinter) {
+
+  Segment s1, s2;
+
+  s1.x0 = g1.p1.x;
+  s1.x1 = g1.p2.x;
+
+  s1.y0 = g1.p1.y;
+  s1.y1 = g1.p2.y;
+
+  s2.x0 = g2.p1.x;
+  s2.x1 = g2.p2.x;
+
+  s2.y0 = g2.p1.y;
+  s2.y1 = g2.p2.y;
+
+  return intersect(&s1, &s2, pinter);
+
+}
+
 bool intersect(const Segment* s1, 
                const Segment* s2, 
                at::Point& pinter) {
@@ -189,6 +211,15 @@ Quad::Quad(const at::Point pp[4], const at::Point& oc, at::real op):
   opticalCenter(oc), observedPerimeter(op)
 {
 
+
+  for (size_t i=0; i<4; ++i) { p[i] = pp[i]; }
+
+  recomputeHomography();
+
+}
+
+void Quad::recomputeHomography() {
+
   at::Point src[4] = {
     at::Point(-1, -1),
     at::Point( 1, -1),
@@ -199,15 +230,13 @@ Quad::Quad(const at::Point pp[4], const at::Point& oc, at::real op):
   at::Point dst[4];
 
   for (size_t i=0; i<4; ++i) {
-    p[i] = pp[i];
-    dst[i] = pp[i] - opticalCenter;
+    dst[i] = p[i] - opticalCenter;
   }
 
   cv::Mat_<at::Point> srcmat(4, 1, src);
   cv::Mat_<at::Point> dstmat(4, 1, dst);
 
   H = cv::findHomography(srcmat, dstmat);
-  
 
 }
 
@@ -234,90 +263,3 @@ at::Point Quad::interpolate01(at::real x, at::real y) const {
   return interpolate(2*x-1, 2*y-1);
 }
 
-//////////////////////////////////////////////////////////////////////
-
-cv::Mat rescaleImage(const cv::Mat& img, ScaleType type) {
-
-  cv::Mat rval;
-
-  if (type == ScaleNone) {
-
-    if (img.depth() == CV_8U) {
-      rval = img.clone();
-    } else {
-      double fmin, fmax;
-      cv::minMaxLoc(img, &fmin, &fmax);
-      if (fmax - fmin <= 1) {
-        rval = cv::Mat(img.rows, img.cols, CV_8U);
-        cv::convertScaleAbs(img, rval, 255);
-      } else {
-        img.convertTo(rval, CV_8U);
-      }
-    }
-
-  } else {
-  
-    cv::Mat fsrc;
-    
-    if (img.depth() != at::IMAGE_TYPE) {
-      img.convertTo(fsrc, at::IMAGE_TYPE);
-    } else {
-      fsrc = img;
-    }
-    
-    cv::Mat tmp;
-    
-    if (type == ScaleMinMax) {
-      double fmin, fmax;
-      cv::minMaxLoc(fsrc, &fmin, &fmax);
-      tmp = 255*((fsrc-fmin)/(fmax-fmin));
-    } else {
-      at::real fmag = cv::norm(fsrc, cv::NORM_INF);
-      tmp = 127 + 127*fsrc/fmag;
-    }
-
-    tmp.convertTo(rval, CV_8U);
-
-  }
-
-  return rval;
-
-}
-
-void labelImage(cv::Mat& img, const std::string& text) {
-
-  cv::putText(img, text, cv::Point(4, 20),
-              cv::FONT_HERSHEY_SIMPLEX,
-              0.6, CV_RGB(0,0,0), 3, CV_AA);
-
-  cv::putText(img, text, cv::Point(4, 20),
-              cv::FONT_HERSHEY_SIMPLEX,
-              0.6, CV_RGB(255,255,255), 1, CV_AA);
-
-}
-
-void labelAndWaitForKey(const std::string& window,
-                        const std::string& text,
-                        const cv::Mat& img,
-                        ScaleType type) {
-  
-  cv::Mat rescaled = rescaleImage(img, type);
-
-  int fw = 1400 / rescaled.cols;
-  int fh = 1000 / rescaled.rows;
-
-  int f = std::min(fw,fh);
-
-  if (f > 1) {
-    cv::Mat tmp;
-    cv::resize(rescaled, tmp, cv::Size(0,0), f, f, CV_INTER_NN);
-    rescaled = tmp;
-  }
-
-  labelImage(rescaled, text);
-  
-  cv::imshow(window, rescaled);
-  cv::waitKey();
-
-
-}

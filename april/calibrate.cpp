@@ -7,6 +7,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <sys/stat.h>
 #include "Geometry.h"
+#include "DebugImage.h"
 #include <stdio.h>
 
 DEFINE_int32(frame_width, 640, "Desired video frame width.");

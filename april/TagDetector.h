@@ -3,42 +3,12 @@
 
 #include "Geometry.h"
 #include "TagFamily.h"
+#include "Refine.h"
 
 class TagDetectorParams {
- public:
-  static const at::real kDefaultSigma = 0;
-  static const at::real kDefaultSegSigma = 0.8;
-  static const bool     kDefaultSegDecimate = false;
-  static const at::real kDefaultMinMag = 0.004;
-  static const at::real kDefaultMaxEdgeCost = 30*M_PI/180;
-  static const at::real kDefaultThetaThresh = 100;
-  static const at::real kDefaultMagThresh = 1200;
-  static const at::real kDefaultMinimumLineLength = 4;
-  static const at::real kDefaultMinimumSegmentSize = 4;
-  static const at::real kDefaultMinimumTagSize = 6;
-  static const at::real kDefaultMaxQuadAspectRatio = 32;
-  static const bool     kDefaultRefineCorners = false;
-  static const bool     kDefaultRefineCornersSubPix = false;
-  static const int      kDefaultCornerBlockSize = 3;
-  static const int      kDefaultCornerSearchRadius = 3;
+public:
 
-  TagDetectorParams() :
-      sigma(kDefaultSigma),
-      segSigma(kDefaultSegSigma),
-      segDecimate(kDefaultSegDecimate),
-      minMag(kDefaultMinMag),
-      maxEdgeCost(kDefaultMaxEdgeCost),
-      thetaThresh(kDefaultThetaThresh),
-      magThresh(kDefaultMagThresh),
-      minimumLineLength(kDefaultMinimumLineLength),
-      minimumSegmentSize(kDefaultMinimumSegmentSize),
-      minimumTagSize(kDefaultMinimumTagSize),
-      maxQuadAspectRatio(kDefaultMaxQuadAspectRatio),
-      refineCorners(kDefaultRefineCorners),
-      refineCornersSubPix(kDefaultRefineCornersSubPix),
-      cornerBlockSize(kDefaultCornerBlockSize),
-      cornerSearchRadius(kDefaultCornerSearchRadius) {
-  }
+  TagDetectorParams();
 
   at::real sigma;
   at::real segSigma;
@@ -51,10 +21,10 @@ class TagDetectorParams {
   at::real minimumSegmentSize;
   at::real minimumTagSize;
   at::real maxQuadAspectRatio;
-  bool     refineCorners;
-  bool     refineCornersSubPix;
-  int      cornerBlockSize;
-  int      cornerSearchRadius;
+  bool     refineQuads;
+  bool     refineBad;
+  bool     newQuadAlgorithm;
+
 };
 
 
@@ -81,6 +51,7 @@ public:
                const at::Point& opticalCenter,
                TagDetectionArray& detections) const;
 
+
   void search(const at::Point& opticalCenter,
               QuadArray& quads, 
               Segment* path[5],
@@ -96,6 +67,55 @@ public:
   bool debug;
   bool debugNumberFiles;
   std::string debugWindowName; // if this is empty, will instead emit files
+
+private:
+
+  struct Images {
+
+    cv::Mat orig;
+    cv::Mat_<cv::Vec3b> origRGB;
+    cv::Mat origBW;
+    cv::Mat_<unsigned char> origBW8;
+
+    at::Mat gx;
+    at::Mat gy;
+
+    at::Mat fimOrig; 
+    at::Mat fim;
+    
+    at::Point opticalCenter;
+
+  };
+
+  TPointArray tpoints;
+
+  void makeImages(const cv::Mat& image, 
+                  const at::Point& opticalCenter,
+                  Images& images) const;
+  
+  void getQuads_AT(const Images& images,
+                   QuadArray& quads) const;
+
+  void getQuads_MZ(const Images& images,
+                   QuadArray& quads) const;
+
+  void refineQuads_MZ(const Images& images,
+                      QuadArray& quads) const;
+  
+  void debugShowQuads(const Images& images,
+                      const QuadArray& quads,
+                      int step, const std::string& label) const;
+
+  void decode(const Images& images,
+              const QuadArray& quads,
+              TagDetectionArray& detections) const;
+
+  bool decodeQuad(const Images& images,
+                  const Quad& quad, 
+                  size_t quadIndex,
+                  TagDetectionArray& detections) const;
+
+
 };
 
 
