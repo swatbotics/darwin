@@ -34,6 +34,7 @@ static const rgb_color TAG_RING_DEFAULT_COLOR = TAG_RING_DEFAULT_COLOR_RGB;
 void print_usage(const char* tool_name) {
   TagFamily default_family(DEFAULT_TAG_FAMILY);
   TagDetector default_detector(default_family);
+  TagDetectorParams default_params;
   fprintf(stderr, "\
 Usage: %s [-d] [-t] [-f FAMILY]\n\
 Run a tool to test Darwin's tag detection. Options:\n\
@@ -46,9 +47,9 @@ Run a tool to test Darwin's tag detection. Options:\n\
  -m MAGTHRESH    Set the magnitude threshold for clustering (default %.1f).\n\
  -f FAMILY       Look for the given tag family (default \"%s\")\n",
           tool_name,
-          TagDetectorParams::kDefaultSegSigma,
-          TagDetectorParams::kDefaultThetaThresh,
-          TagDetectorParams::kDefaultMagThresh,
+          default_params.segSigma,
+          default_params.thetaThresh,
+          default_params.magThresh,
           DEFAULT_TAG_FAMILY);
   fprintf(stderr, "Known tag families:");
   TagFamily::StringArray known = TagFamily::families();
