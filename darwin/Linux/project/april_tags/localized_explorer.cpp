@@ -152,14 +152,14 @@ cv::Vec3d LocalizedExplorer::GetGoalDirection(
   }
 
   // Map goal point from object frame to world frame.
-  cv::Vec3d origin = t_obj_to_world;
+  cv::Vec3d origin = cv::Mat(t_obj_to_world);
   cv::Vec3d goal_point_raw(FLAGS_goal_x, FLAGS_goal_y, FLAGS_goal_z);
   cv::Mat goal_point_mat = (r_obj_to_world * cv::Mat(goal_point_raw) +
                             t_obj_to_world);
   cv::Vec3d goal_point = goal_point_mat;
 
   // Determine whether head should align with goal as a point or an axis.
-  cv::Vec3d head_point(head.t);
+  cv::Vec3d head_point(cv::Mat(head.t));
   cv::Vec3d goal_dir;
   if (FLAGS_goal_axis_only) {
     goal_dir = goal_point - origin;
