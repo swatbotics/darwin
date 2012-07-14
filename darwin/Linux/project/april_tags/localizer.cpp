@@ -119,7 +119,9 @@ Localizer::Localizer() :
 {
   tag_family_.setErrorRecoveryFraction(FLAGS_error_recovery_frac);
   detector_.params.refineQuads = true;
-  detector_.params.newQuadAlgorithm = true;
+  if (detector_.params.hasNewQuadAlgorithm) {
+    detector_.params.newQuadAlgorithm = true;
+  }
   //  detector_.params.segDecimate = true;
   //  detector_.params.thetaThresh = 25;
   //  detector_.params.refineCornersSubPix = true;
