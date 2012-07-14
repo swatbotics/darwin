@@ -118,6 +118,8 @@ Localizer::Localizer() :
     global_rotation_(3, 3)
 {
   tag_family_.setErrorRecoveryFraction(FLAGS_error_recovery_frac);
+  detector_.params.refineQuads = true;
+  detector_.params.newQuadAlgorithm = true;
   //  detector_.params.segDecimate = true;
   //  detector_.params.thetaThresh = 25;
   //  detector_.params.refineCornersSubPix = true;
