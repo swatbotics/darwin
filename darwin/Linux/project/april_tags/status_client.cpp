@@ -2,12 +2,17 @@
 
 #include <iostream>
 #include <sstream>
+#include <time.h>
 
 #include <boost/bind.hpp>
+#include <gflags/gflags.h>
 
 #define DEBUG false
 
 namespace asio = boost::asio;
+
+DEFINE_bool(measure_latency, false,
+            "Set if measuring client-server latency.");
 
 const int StatusClient::kDefaultServerPort = 9000;
 const int StatusClient::kRecvBufferSize = 2048;
@@ -52,13 +57,53 @@ void StatusClient::HandleResponse(const asio::error_code& error,
                                   std::size_t bytes_transferred) {
   if (DEBUG) std::cout << "Handling response!\n";
   if (!error) {
+    std::string payload(recv_buffer_.begin(),
+                        recv_buffer_.begin() + bytes_transferred);
+    size_t start_pos = 0;
+    if (FLAGS_measure_latency) {
+      size_t nl_pos = payload.find('\n');
+      start_pos = nl_pos + 1;
+      std::string timestamp = payload.substr(0, nl_pos);
+      MeasureLatency(timestamp);
+    }
     {
       boost::lock_guard<boost::mutex> lock(data_mutex_);
-      data_.assign(recv_buffer_.begin(),
-                   recv_buffer_.begin() + bytes_transferred);
+      data_.assign(payload, start_pos, payload.size());
     }
   }
   SendRequest();
+}
+
+void StatusClient::MeasureLatency(const std::string& timestamp) {
+  std::stringstream sstr(timestamp);
+  struct timespec server_time, client_time, diff_time;
+  sstr >> server_time.tv_sec >> server_time.tv_nsec;
+  clock_gettime(CLOCK_REALTIME, &client_time);
+
+  // Get the difference between the timespecs.
+  diff_time.tv_sec = client_time.tv_sec - server_time.tv_sec;
+  diff_time.tv_nsec = client_time.tv_nsec - server_time.tv_nsec;
+  if (diff_time.tv_nsec < 0) {
+    diff_time.tv_sec -= 1;
+    diff_time.tv_nsec += 1000 * 1000 * 1000;
+  }
+
+  // Compute and print latency.
+  double latency = (diff_time.tv_sec +
+                    diff_time.tv_nsec / (1000 * 1000 * 1000.0));
+  fprintf(stderr, "Latency: ");
+  if (latency > 1.0) {
+    fprintf(stderr, "%.1fs", latency);
+  } else {
+    double latency_ms = latency * 1000;
+    if (latency_ms > 1.0) {
+      fprintf(stderr, "%.1fms", latency_ms);
+    } else {
+      double latency_us = latency_ms * 1000;
+      fprintf(stderr, "%.1fus", latency_us);
+    }
+  }
+  std::cerr << "\n";
 }
 
 void StatusClient::Run() {
