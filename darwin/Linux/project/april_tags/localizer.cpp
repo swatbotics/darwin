@@ -18,6 +18,8 @@ DEFINE_double(focal_length, 500,
 DEFINE_string(tag_family, "Tag36h11",
               "Tag family to use for detections.");
 DEFINE_double(default_tag_size, 0.075, "Size of unassociated tags.");
+DEFINE_double(error_recovery_frac, 0.5,
+              "Fraction of tag detection errors to correct for.");
 DEFINE_int32(frame_width, 640, "Desired video frame width.");
 DEFINE_int32(frame_height, 480, "Desired video frame height.");
 DEFINE_bool(rigid_transform, true,
@@ -115,6 +117,7 @@ Localizer::Localizer() :
     global_translation_(3, 1),
     global_rotation_(3, 3)
 {
+  tag_family_.setErrorRecoveryFraction(FLAGS_error_recovery_frac);
   //  detector_.params.segDecimate = true;
   //  detector_.params.thetaThresh = 25;
   //  detector_.params.refineCornersSubPix = true;
