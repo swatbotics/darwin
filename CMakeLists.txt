@@ -2,6 +2,9 @@
 
 cmake_minimum_required(VERSION 2.8)
 
+# This allows else(), endif(), etc... (without repeating the expression)
+set(CMAKE_ALLOW_LOOSE_LOOP_CONSTRUCTS true)
+
 project(swatbotics)
 
 include(FindPkgConfig)
@@ -18,22 +21,22 @@ if (CGAL_FOUND)
 endif (CGAL_FOUND)
 
 if (APPLE)
-find_library(OPENGL_LIBRARY OpenGL)
-find_library(GLUT_LIBRARY Glut)
-set(OPENGL_LIBRARIES ${OPENGL_LIBRARY} )
-else (APPLE)
-find_library(OPENGL_LIBRARY GL)
-find_library(GLU_LIBRARY GLU)
-find_library(GLUT_LIBRARY glut)
-set(OPENGL_LIBRARIES ${OPENGL_LIBRARY} ${GLU_LIBRARY})
-endif (APPLE)
+  find_library(OPENGL_LIBRARY OpenGL)
+  find_library(GLUT_LIBRARY Glut)
+  set(OPENGL_LIBRARIES ${OPENGL_LIBRARY} )
+else ()
+  find_library(OPENGL_LIBRARY GL)
+  find_library(GLU_LIBRARY GLU)
+  find_library(GLUT_LIBRARY glut)
+  set(OPENGL_LIBRARIES ${OPENGL_LIBRARY} ${GLU_LIBRARY})
+endif ()
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 
-IF(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
-   SET(CMAKE_BUILD_TYPE Release)
-ENDIF(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+if (NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif ()
 
 set(CMAKE_C_FLAGS "-Wall -g")
 set(CMAKE_CXX_FLAGS "-Wall -g")
