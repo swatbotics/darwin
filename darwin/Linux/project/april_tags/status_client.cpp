@@ -92,11 +92,11 @@ void StatusClient::MeasureLatency(const std::string& timestamp) {
   double latency = (diff_time.tv_sec +
                     diff_time.tv_nsec / (1000 * 1000 * 1000.0));
   fprintf(stderr, "Latency: ");
-  if (latency > 1.0) {
+  if (abs(latency) > 1.0) {
     fprintf(stderr, "%.1fs", latency);
   } else {
     double latency_ms = latency * 1000;
-    if (latency_ms > 1.0) {
+    if (abs(latency_ms) > 1.0) {
       fprintf(stderr, "%.1fms", latency_ms);
     } else {
       double latency_us = latency_ms * 1000;
