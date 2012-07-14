@@ -13,13 +13,6 @@ pkg_check_modules(CAIRO REQUIRED cairo)
 pkg_search_module(OPENCV REQUIRED opencv>=2.3 opencv-2.3.1)
 pkg_check_modules(SDL sdl)
 
-find_package(CGAL QUIET)
-if (CGAL_FOUND)
-  message("Using CGAL:")
-  include(${CGAL_DIR}/UseCGAL.cmake)
-  message("")
-endif (CGAL_FOUND)
-
 if (APPLE)
   find_library(OPENGL_LIBRARY OpenGL)
   find_library(GLUT_LIBRARY Glut)

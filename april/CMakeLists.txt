@@ -14,12 +14,18 @@ link_directories(${OPENCV_LIBRARY_DIRS})
 
 include_directories(${GFLAGS_INCLUDE_DIRS})
 
-if (CGAL_LIBRARY)
-  set(AT_LIBS apriltagcpp ${OPENCV_LIBRARIES} ${CGAL_LIBRARY})
-  add_definitions("-DHAVE_CGAL")
-else (CGAL_LIBRARY)
-  set(AT_LIBS apriltagcpp ${OPENCV_LIBRARIES})
-endif (CGAL_LIBRARY)
+set(AT_LIBS apriltagcpp ${OPENCV_LIBRARIES})
+
+find_package(CGAL QUIET)
+if (CGAL_FOUND)
+  message("Using CGAL:")
+  include(${CGAL_DIR}/UseCGAL.cmake)
+  message("")
+  if (CGAL_LIBRARY)
+    set(AT_LIBS "${AT_LIBS}" ${CGAL_LIBRARY})
+    add_definitions("-DHAVE_CGAL")
+  endif ()
+endif ()
 
 add_library(apriltagcpp 
   CameraUtil.cpp
