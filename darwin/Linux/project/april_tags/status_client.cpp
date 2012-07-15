@@ -28,6 +28,7 @@ StatusClient::StatusClient(std::string server_name,
     remote_endpoint_(),
     send_buffer_(1, '\0'),
     recv_buffer_(kRecvBufferSize),
+    request_send_time_(),
     io_thread_()
 {
 }
@@ -44,6 +45,7 @@ void StatusClient::SendRequest() {
 void StatusClient::HandleRequest(const asio::error_code& error,
                                  std::size_t /*bytes_transferred*/) {
   if (DEBUG) std::cout << "Handling request!\n";
+  clock_gettime(CLOCK_REALTIME, &request_send_time_);
   if (!error) {
     socket_.async_receive_from(
         asio::buffer(recv_buffer_), remote_endpoint_,
@@ -64,7 +66,12 @@ void StatusClient::HandleResponse(const asio::error_code& error,
       size_t nl_pos = payload.find('\n');
       start_pos = nl_pos + 1;
       std::string timestamp = payload.substr(0, nl_pos);
-      MeasureLatency(timestamp);
+      std::string time_offset = MeasureDelay(timestamp);
+      std::stringstream ss;
+      ss << request_send_time_.tv_sec << " " << request_send_time_.tv_nsec;
+      std::string rt_latency = MeasureDelay(ss.str());
+      std::cerr << "Time offset: " << time_offset << " - "
+                << "RT latency: " << rt_latency << "\n";
     }
     {
       boost::lock_guard<boost::mutex> lock(data_mutex_);
@@ -74,7 +81,7 @@ void StatusClient::HandleResponse(const asio::error_code& error,
   SendRequest();
 }
 
-void StatusClient::MeasureLatency(const std::string& timestamp) {
+std::string StatusClient::MeasureDelay(const std::string& timestamp) {
   std::stringstream sstr(timestamp);
   struct timespec server_time, client_time, diff_time;
   sstr >> server_time.tv_sec >> server_time.tv_nsec;
@@ -88,22 +95,25 @@ void StatusClient::MeasureLatency(const std::string& timestamp) {
     diff_time.tv_nsec += 1000 * 1000 * 1000;
   }
 
-  // Compute and print latency.
-  double latency = (diff_time.tv_sec +
-                    diff_time.tv_nsec / (1000 * 1000 * 1000.0));
-  fprintf(stderr, "Latency: ");
-  if (abs(latency) > 1.0) {
-    fprintf(stderr, "%.1fs", latency);
+  // Compute and print delay.
+  double delay = (diff_time.tv_sec +
+                  diff_time.tv_nsec / (1000 * 1000 * 1000.0));
+  std::stringstream ss;
+  ss.precision(1);
+  ss.width(5);
+  ss << std::fixed;
+  if (abs(delay) >= 1.0) {
+    ss << delay << "s";
   } else {
-    double latency_ms = latency * 1000;
-    if (abs(latency_ms) > 1.0) {
-      fprintf(stderr, "%.1fms", latency_ms);
+    double delay_ms = delay * 1000;
+    if (abs(delay_ms) >= 1.0) {
+      ss << delay_ms << "ms";
     } else {
-      double latency_us = latency_ms * 1000;
-      fprintf(stderr, "%.1fus", latency_us);
+      double delay_us = delay_ms * 1000;
+      ss << delay_us << "us";
     }
   }
-  std::cerr << "\n";
+  return ss.str();
 }
 
 void StatusClient::Run() {

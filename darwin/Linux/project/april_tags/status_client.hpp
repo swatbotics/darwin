@@ -2,6 +2,7 @@
 #define STATUS_CLIENT_HPP
 
 #include <string>
+#include <time.h>
 
 #include <boost/asio.hpp>
 #include <boost/thread/thread.hpp>
@@ -33,7 +34,7 @@ class StatusClient {
                      std::size_t /*bytes_transferred*/);
   void HandleResponse(const asio::error_code& error,
                       std::size_t bytes_transferred);
-  void MeasureLatency(const std::string& timestamp);
+  std::string MeasureDelay(const std::string& timestamp);
 
   std::string server_name_;
   int server_port_;
@@ -44,6 +45,7 @@ class StatusClient {
   udp::endpoint remote_endpoint_;
   std::vector<char> send_buffer_;
   std::vector<char> recv_buffer_;
+  struct timespec request_send_time_;
   asio::thread io_thread_;
 };
 
