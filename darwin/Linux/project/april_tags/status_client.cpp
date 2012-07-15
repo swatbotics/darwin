@@ -1,5 +1,6 @@
 #include "status_client.hpp"
 
+#include <cmath>  // For abs() with floating-point support.
 #include <iostream>
 #include <sstream>
 #include <time.h>
