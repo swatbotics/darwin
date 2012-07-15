@@ -17,6 +17,9 @@ add_executable(tag_test_tool tag_test_tool.cpp
 target_link_libraries(tag_test_tool ${DARWIN_LIBS} apriltagcpp
   ${OPENCV_LIBRARIES})
 
+add_executable(test_camera_latency test_camera_latency.cpp)
+target_link_libraries(test_camera_latency ${OPENCV_LIBRARIES} pthread gflags)
+
 find_package(Boost COMPONENTS system thread)
 if (Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIR})
