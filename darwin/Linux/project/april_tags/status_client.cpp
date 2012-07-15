@@ -18,6 +18,58 @@ DEFINE_bool(measure_latency, false,
 const int StatusClient::kDefaultServerPort = 9000;
 const int StatusClient::kRecvBufferSize = 2048;
 
+struct timespec MakeTimespecFromString(const std::string& str) {
+  struct timespec ts;
+  std::stringstream ss(str);
+  ss >> ts.tv_sec >> ts.tv_nsec;
+  return ts;
+}
+
+struct timespec GetTimespecDiff(struct timespec first,
+                                struct timespec second) {
+  struct timespec diff_time;
+  diff_time.tv_sec = first.tv_sec - second.tv_sec;
+  diff_time.tv_nsec = first.tv_nsec - second.tv_nsec;
+  if (diff_time.tv_nsec < 0) {
+    diff_time.tv_sec -= 1;
+    diff_time.tv_nsec += 1000 * 1000 * 1000;
+  }
+  return diff_time;
+}
+
+struct timespec ScaleTimespec(struct timespec ts, double scale) {
+  struct timespec scaled;
+  scaled.tv_sec = abs(ts.tv_sec) * scale;
+  scaled.tv_nsec = abs(ts.tv_nsec) * scale;
+  time_t extra = abs(ts.tv_sec) - scaled.tv_sec * (1 / scale);
+  scaled.tv_nsec += extra * 1000 * 1000 * 1000 * scale;
+  // Recover sign information.
+  scaled.tv_sec *= (ts.tv_sec >= 0 ? 1 : -1);
+  scaled.tv_nsec *= (ts.tv_nsec >= 0 ? 1 : -1);
+  return scaled;
+}
+
+std::string MakeTimespecString(struct timespec ts) {
+  double time_in_s = (ts.tv_sec + ts.tv_nsec / (1000 * 1000 * 1000.0));
+  std::stringstream ss;
+  ss.precision(1);
+  ss.width(5);
+  ss << std::fixed;
+  if (abs(time_in_s) >= 1.0) {
+    ss << time_in_s << "s";
+  } else {
+    double time_in_ms = time_in_s * 1000;
+    if (abs(time_in_ms) >= 1.0) {
+      ss << time_in_ms << "ms";
+    } else {
+      double time_in_us = time_in_ms * 1000;
+      ss << time_in_us << "us";
+    }
+  }
+  return ss.str();
+}
+
+
 StatusClient::StatusClient(std::string server_name,
                            int server_port=kDefaultServerPort) :
     server_name_(server_name),
@@ -67,12 +119,7 @@ void StatusClient::HandleResponse(const asio::error_code& error,
       size_t nl_pos = payload.find('\n');
       start_pos = nl_pos + 1;
       std::string timestamp = payload.substr(0, nl_pos);
-      std::string time_offset = MeasureDelay(timestamp);
-      std::stringstream ss;
-      ss << request_send_time_.tv_sec << " " << request_send_time_.tv_nsec;
-      std::string rt_latency = MeasureDelay(ss.str());
-      std::cerr << "Time offset: " << time_offset << " - "
-                << "RT latency: " << rt_latency << "\n";
+      MeasureDelay(timestamp);
     }
     {
       boost::lock_guard<boost::mutex> lock(data_mutex_);
@@ -82,39 +129,19 @@ void StatusClient::HandleResponse(const asio::error_code& error,
   SendRequest();
 }
 
-std::string StatusClient::MeasureDelay(const std::string& timestamp) {
-  std::stringstream sstr(timestamp);
-  struct timespec server_time, client_time, diff_time;
-  sstr >> server_time.tv_sec >> server_time.tv_nsec;
+void StatusClient::MeasureDelay(const std::string& timestamp) {
+  struct timespec server_time = MakeTimespecFromString(timestamp);
+  struct timespec client_time;
   clock_gettime(CLOCK_REALTIME, &client_time);
-
-  // Get the difference between the timespecs.
-  diff_time.tv_sec = client_time.tv_sec - server_time.tv_sec;
-  diff_time.tv_nsec = client_time.tv_nsec - server_time.tv_nsec;
-  if (diff_time.tv_nsec < 0) {
-    diff_time.tv_sec -= 1;
-    diff_time.tv_nsec += 1000 * 1000 * 1000;
-  }
-
-  // Compute and print delay.
-  double delay = (diff_time.tv_sec +
-                  diff_time.tv_nsec / (1000 * 1000 * 1000.0));
-  std::stringstream ss;
-  ss.precision(1);
-  ss.width(5);
-  ss << std::fixed;
-  if (abs(delay) >= 1.0) {
-    ss << delay << "s";
-  } else {
-    double delay_ms = delay * 1000;
-    if (abs(delay_ms) >= 1.0) {
-      ss << delay_ms << "ms";
-    } else {
-      double delay_us = delay_ms * 1000;
-      ss << delay_us << "us";
-    }
-  }
-  return ss.str();
+  struct timespec plain_diff = GetTimespecDiff(client_time, server_time);
+  struct timespec rt_time_diff = GetTimespecDiff(client_time,
+                                                 request_send_time_);
+  struct timespec oneway_time_diff = ScaleTimespec(rt_time_diff, 0.5);
+  struct timespec clock_diff = GetTimespecDiff(plain_diff,
+                                               oneway_time_diff);
+  std::cerr << "RT latency: " << MakeTimespecString(rt_time_diff) << " - "
+            << "OW latency: " << MakeTimespecString(oneway_time_diff) << " - "
+            << "Clock diff: " << MakeTimespecString(clock_diff) << "\n";
 }
 
 void StatusClient::Run() {

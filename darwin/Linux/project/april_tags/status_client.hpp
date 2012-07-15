@@ -34,7 +34,7 @@ class StatusClient {
                      std::size_t /*bytes_transferred*/);
   void HandleResponse(const asio::error_code& error,
                       std::size_t bytes_transferred);
-  std::string MeasureDelay(const std::string& timestamp);
+  void MeasureDelay(const std::string& server_time);
 
   std::string server_name_;
   int server_port_;
