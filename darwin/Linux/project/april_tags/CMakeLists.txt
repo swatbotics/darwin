@@ -21,13 +21,16 @@ find_package(Boost COMPONENTS system thread)
 if (Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIR})
 
+  add_executable(status_server status_server.cpp status_server_main.cpp)
+  target_link_libraries(status_server ${Boost_LIBRARIES} gflags rt)
+
+  add_executable(status_client status_client.cpp status_client_main.cpp)
+  target_link_libraries(status_client ${Boost_LIBRARIES} gflags rt)
+
   add_executable(localization_server localization_server.cpp
     localization_server_main.cpp status_server.cpp localizer.cpp util.cpp)
   target_link_libraries(localization_server ${Boost_LIBRARIES}
     apriltagcpp ${OPENCV_LIBRARIES} gflags config++ rt)
-
-  add_executable(status_client status_client.cpp status_client_main.cpp)
-  target_link_libraries(status_client ${Boost_LIBRARIES} gflags rt)
 
   add_executable(run_localized_explorer localized_explorer.cpp
     status_client.cpp pid_controller.cpp util.cpp)
