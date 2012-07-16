@@ -19,33 +19,39 @@ using asio::ip::udp;
 
 class StatusClient {
  public:
-  StatusClient(std::string server_name, int server_port);
+  StatusClient();
   ~StatusClient() {}
+  std::string GetData();
   void Run();
   void Stop();
-  std::string GetData();
 
  private:
-  static const int kDefaultServerPort;
   static const int kRecvBufferSize;
-
+  void SubscribeData();
+  void HandleSubscribe(const asio::error_code& error,
+                       std::size_t bytes_transferred);
   void SendRequest();
   void HandleRequest(const asio::error_code& /*error*/,
                      std::size_t /*bytes_transferred*/);
+  void ReceiveResponse();
   void HandleResponse(const asio::error_code& error,
                       std::size_t bytes_transferred);
+  void ParseDataFromBuffer(const std::vector<char>& buffer,
+                           size_t num_bytes);
   void MeasureDelay(const std::string& server_time);
 
-  std::string server_name_;
-  int server_port_;
   boost::mutex data_mutex_;
   std::string data_;
   asio::io_service io_service_;
   udp::socket socket_;
+  udp::socket multicast_socket_;
   udp::endpoint remote_endpoint_;
+  udp::endpoint multicast_endpoint_;
   std::vector<char> send_buffer_;
   std::vector<char> recv_buffer_;
+  std::vector<char> multicast_recv_buffer_;
   struct timespec request_send_time_;
+  asio::io_service::work* worker_;
   asio::thread io_thread_;
 };
 

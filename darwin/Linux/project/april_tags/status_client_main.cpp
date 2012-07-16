@@ -6,10 +6,6 @@
 
 #include "status_client.hpp"
 
-DEFINE_string(server_name, "192.168.1.7",
-              "IP address or DNS name of the status server to query.");
-DEFINE_int32(server_port, 9000,
-             "Port on the status server to connect to.");
 DEFINE_double(printing_interval, 0.01,
               "Interval in seconds between printing out status data.");
 DEFINE_bool(quiet, false,
@@ -20,7 +16,7 @@ int main(int argc, char* argv[]) {
   usage += std::string("Usage: ") + argv[0] + std::string(" [OPTIONS]");
   gflags::SetUsageMessage(usage);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  StatusClient client(FLAGS_server_name, FLAGS_server_port);
+  StatusClient client;
   client.Run();
   while (true) {
     if (!FLAGS_quiet) std::cout << client.GetData() << std::endl;

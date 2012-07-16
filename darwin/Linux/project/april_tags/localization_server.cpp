@@ -1,7 +1,7 @@
 #include "localization_server.hpp"
 
-LocalizationServer::LocalizationServer(int server_port) :
-    server_(server_port),
+LocalizationServer::LocalizationServer() :
+    server_(),
     localizer_(),
     callback_(&server_) {
 }
