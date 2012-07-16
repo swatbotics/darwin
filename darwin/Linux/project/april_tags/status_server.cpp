@@ -1,14 +1,20 @@
 #include "status_server.hpp"
 
 #include <iostream>
+#include <sstream>
+#include <time.h>
 
 #include <boost/bind.hpp>
+#include <gflags/gflags.h>
 
 #include "util.hpp"
 
 #define DEBUG false
 
 namespace asio = boost::asio;
+
+DEFINE_bool(measure_latency, false,
+            "Set if measuring client-server latency.");
 
 const int StatusServer::kDefaultServerPort = 9000;
 
@@ -42,11 +48,16 @@ void StatusServer::ReceiveRequest() {
 void StatusServer::HandleRequest(const asio::error_code& error,
                                        std::size_t /*bytes_transferred*/) {
   if (DEBUG) std::cout << "Handling request!\n";
-  boost::shared_ptr<std::string> response_data(
-      new std::string(""));
+  std::stringstream sstr;
+  if (FLAGS_measure_latency) {
+    struct timespec curtime;
+    clock_gettime(CLOCK_REALTIME, &curtime);
+    sstr << curtime.tv_sec << " " << curtime.tv_nsec << "\n";
+  }
+  boost::shared_ptr<std::string> response_data(new std::string(sstr.str()));
   {
     boost::lock_guard<boost::mutex> lock(data_mutex_);
-    *response_data = data_;
+    *response_data += data_;
   }
   if (!error || error == asio::error::message_size) {
     socket_.async_send_to(

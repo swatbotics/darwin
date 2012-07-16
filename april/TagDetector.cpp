@@ -64,6 +64,12 @@ static const bool     kDefaultRefineQuads = false;
 static const bool     kDefaultRefineBad = false;
 static const bool     kDefaultNewQuadAlgorithm = false;
 
+#ifdef HAS_CGAL
+static const bool     kDefaultHasNewQuadAlgorithm = true;
+#else
+static const bool     kDefaultHasNewQuadAlgorithm = false;
+#endif
+
 
 struct TimingInfo {
 
@@ -245,7 +251,8 @@ TagDetectorParams::TagDetectorParams() :
   maxQuadAspectRatio(kDefaultMaxQuadAspectRatio),
   refineQuads(kDefaultRefineQuads),
   refineBad(kDefaultRefineBad),
-  newQuadAlgorithm(kDefaultNewQuadAlgorithm) { }
+  newQuadAlgorithm(kDefaultNewQuadAlgorithm),
+  hasNewQuadAlgorithm(kDefaultHasNewQuadAlgorithm) { }
 
 TagDetector::TagDetector(const TagFamily& f,
                          const TagDetectorParams& parameters) :

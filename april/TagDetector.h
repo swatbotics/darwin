@@ -24,7 +24,7 @@ public:
   bool     refineQuads;
   bool     refineBad;
   bool     newQuadAlgorithm;
-
+  bool     hasNewQuadAlgorithm;
 };
 
 
