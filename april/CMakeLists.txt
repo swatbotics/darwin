@@ -58,4 +58,9 @@ target_link_libraries(maketags ${CAIRO_LIBRARIES} ${AT_LIBS})
 if (GLUT_LIBRARY)
 add_executable(gltest gltest.cpp)
 target_link_libraries(gltest ${GLUT_LIBRARY} ${OPENGL_LIBRARIES} ${AT_LIBS})
+
+add_executable(camglut camglut.cpp)
+target_link_libraries(camglut ${GLUT_LIBRARY} ${OPENGL_LIBRARIES} ${AT_LIBS})
+
+
 endif (GLUT_LIBRARY)
