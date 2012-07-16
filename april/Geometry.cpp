@@ -206,23 +206,46 @@ GLineSegment2D lsqFitXYW(const XYWArray& points) {
 
 at::real area(const at::Point* p, size_t n) {
 
+
   if (n < 3) { return 0; }
 
   at::real a = 0;
   
-  for (size_t i=0; i<n-1; ++i) {
+  for (size_t i=0; i<n; ++i) {
 
     const at::Point& p0 = p[i];
-    const at::Point& p1 = p[i+1];
+    const at::Point& p1 = p[(i+1)%n];
 
     a += p0.x * p1.y - p0.y * p1.x;
 
   }
 
   if (a<0) { a = -a; }
+  a *= at::real(0.5);
 
-  return at::real(0.5)*a;
+  return a;
+
+}
+
+at::real area(const cv::Point* p, size_t n) {
+
+  if (n < 3) { return 0; }
+
+  at::real a = 0;
   
+  for (size_t i=0; i<n; ++i) {
+
+    const cv::Point& p0 = p[i];
+    const cv::Point& p1 = p[(i+1)%n];
+
+    a += p0.x * p1.y - p0.y * p1.x;
+
+  }
+
+  if (a<0) { a = -a; }
+  a *= at::real(0.5);
+
+  return a;
 
 }
 

@@ -44,6 +44,7 @@ public:
 };
 
 at::real area(const at::Point* p, size_t n);
+at::real area(const cv::Point* p, size_t n);
 
 struct Quad {
 

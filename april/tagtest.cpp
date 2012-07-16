@@ -18,7 +18,8 @@ typedef struct TagTestOptions {
       no_images(false),
       generate_output_files(false),
       params(),
-      family_str(DEFAULT_TAG_FAMILY) {
+      family_str(DEFAULT_TAG_FAMILY),
+      error_fraction(1){
   }
   bool show_debug_info;
   bool show_timing;
@@ -28,6 +29,7 @@ typedef struct TagTestOptions {
   bool generate_output_files;
   TagDetectorParams params;
   std::string family_str;
+  double error_fraction;
 } TagTestOptions;
 
 
@@ -55,7 +57,8 @@ Run a tool to test tag detection. Options:\n\
  -b              Refine bad quads using template tracker.\n\
  -r              Refine all quads using template tracker.\n\
  -n              Use the new quad detection algorithm.\n\
- -f FAMILY       Look for the given tag family (default \"%s\")\n",
+ -f FAMILY       Look for the given tag family (default \"%s\")\n\
+ -e FRACTION     Set error detection fraction (default 1)\n",
           tool_name,
           p.sigma,
           p.segSigma,
@@ -75,7 +78,7 @@ Run a tool to test tag detection. Options:\n\
 
 TagTestOptions parse_options(int argc, char** argv) {
   TagTestOptions opts;
-  const char* options_str = "hdtRvxoDS:s:a:m:V:N:brnf:";
+  const char* options_str = "hdtRvxoDS:s:a:m:V:N:brnf:e:";
   int c;
   while ((c = getopt(argc, argv, options_str)) != -1) {
     switch (c) {
@@ -98,6 +101,7 @@ TagTestOptions parse_options(int argc, char** argv) {
       case 'r': opts.params.refineQuads = true; break;
       case 'n': opts.params.newQuadAlgorithm = true; break;
       case 'f': opts.family_str = optarg; break;
+      case 'e': opts.error_fraction = atof(optarg); break;
       default:
         fprintf(stderr, "\n");
         print_usage(argv[0], stderr);
@@ -112,9 +116,18 @@ TagTestOptions parse_options(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
+
   const std::string win = "Tag test";
+
   TagTestOptions opts = parse_options(argc, argv);
+
   TagFamily family(opts.family_str);
+
+  if (opts.error_fraction >= 0 && opts.error_fraction < 1) {
+    family.setErrorRecoveryFraction(opts.error_fraction);
+  }
+
+
   TagDetector detector(family, opts.params);
   detector.debug = opts.show_debug_info;
   detector.debugWindowName = opts.generate_output_files ? "" : win;

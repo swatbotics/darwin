@@ -46,7 +46,7 @@ void TagFamily::setErrorRecoveryBits(int b) {
 }
 
 void TagFamily::setErrorRecoveryFraction(at::real v) {
-  errorRecoveryBits = (int) (((int) (minimumHammingDistance-1)/2)*v);
+  errorRecoveryBits = minimumHammingDistance*v/2;
 }
 
 TagFamily::code_t TagFamily::rotate90(TagFamily::code_t w, uint d) {

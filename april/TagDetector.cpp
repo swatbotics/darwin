@@ -64,7 +64,7 @@ static const at::real kDefaultMaxQuadAspectRatio = 32;
 static const bool     kDefaultRefineQuads = false;
 static const bool     kDefaultRefineBad = false;
 static const bool     kDefaultNewQuadAlgorithm = false;
-static const at::real kDefaultAdaptiveThresholdValue = 10;
+static const at::real kDefaultAdaptiveThresholdValue = 5;
 static const int      kDefaultAdaptiveThresholdRadius = 9;
 
 #ifdef HAVE_CGAL
@@ -427,7 +427,6 @@ void TagDetector::getQuads_MZ(const Images& images,
                    CV_RETR_CCOMP,
                    CV_CHAIN_APPROX_SIMPLE);
 
-
   if (debug) {
 
     cv::Mat rgbu = images.origRGB / 2 + 127;
@@ -470,12 +469,28 @@ void TagDetector::getQuads_MZ(const Images& images,
   START_PROFILE(4, 0, "compute convex hulls");
 
   std::vector< std::vector< cv::Point2i > > hulls;
+  std::vector< at::real > hareas;
+
+  int sl = tagFamily.d + 2*tagFamily.blackBorder;
+  int ta = sl*sl;
     
   for (size_t i=0; i<contours.size(); ++i) {
+
+
     if (hierarchy[i][3] < 0 && contours[i].size() >= 4) {
       std::vector<cv::Point2i> hull;
       cv::convexHull( contours[i], hull );
-      hulls.push_back(hull);
+
+      at::real ca = area(&(contours[i][0]), contours[i].size());
+      at::real ha = area(&(hull[0]), hull.size());
+
+      assert( ha >= ca );
+
+      if (ca / ha > at::real(0.8) && ha >= ta) {
+        hulls.push_back(hull);
+        hareas.push_back(ha);
+      }
+
     }
   }
 
@@ -547,6 +562,15 @@ void TagDetector::getQuads_MZ(const Images& images,
         break;
       }
       p[i] = at::Point( ki.x() + 0.5, ki.y() + 0.5 );
+    }
+
+    if (ok) {
+      at::real pa = area(p, 4);
+      at::real ha = hareas[i];
+      assert(ha >= pa);
+      if (pa / ha < at::real(0.8)) {
+        ok = false;
+      }
     }
 
     if (ok && ccw(p[0], p[1], p[2])) {
