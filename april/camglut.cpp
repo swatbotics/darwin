@@ -4,6 +4,7 @@
 #include <GL/glut.h>
 #endif
 
+#include <cstdio>
 #include <stdlib.h>
 #include <opencv2/highgui/highgui.hpp>
 
