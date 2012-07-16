@@ -17,28 +17,31 @@ using asio::ip::udp;
 
 class StatusServer {
  public:
-  StatusServer(int server_port);
+  StatusServer();
   ~StatusServer() {}
   void SetData(const std::string& data);
   void Run();
   void Stop();
 
  private:
-  static const int kDefaultServerPort;
-
+  void PublishData();
+  void RespondData();
+  void SendData(const udp::endpoint& destination, udp::socket& socket);
   void ReceiveRequest();
   void HandleRequest(const asio::error_code& error,
                      std::size_t /*bytes_transferred*/);
-  void HandleResponse(const asio::error_code& /*error*/,
-                      std::size_t /*bytes_transferred*/);
+  void HandleSend(const asio::error_code& error,
+                  std::size_t bytes_transferred);
 
-  int server_port_;
   boost::mutex data_mutex_;
   std::string data_;
   asio::io_service io_service_;
   udp::socket socket_;
+  udp::socket multicast_socket_;
   udp::endpoint remote_endpoint_;
+  udp::endpoint multicast_endpoint_;
   boost::array<int, 1> recv_buffer_;
+  asio::io_service::work* worker_;
   asio::thread io_thread_;
 };
 

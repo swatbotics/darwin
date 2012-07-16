@@ -7,8 +7,6 @@
 
 #include "status_server.hpp"
 
-DEFINE_int32(server_port, 9000,
-             "Port on the status server to connect to.");
 DEFINE_double(update_interval, 0.1,
               "Update interval of dummy data in seconds.");
 DEFINE_bool(quiet, false,
@@ -19,7 +17,7 @@ int main(int argc, char* argv[]) {
   usage += std::string("Usage: ") + argv[0] + std::string(" [OPTIONS]");
   gflags::SetUsageMessage(usage);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  StatusServer server(FLAGS_server_port);
+  StatusServer server;
   server.Run();
   std::stringstream ss;
   int message_count = 0;

@@ -8,7 +8,7 @@
 
 class LocalizationServer {
  public:
-  LocalizationServer(int server_port);
+  LocalizationServer();
   ~LocalizationServer() {}
   void Run();
   void Stop();  // Currently unused; Run() never exits.
