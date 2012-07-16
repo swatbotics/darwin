@@ -22,8 +22,9 @@ DEFINE_int32(multicast_port, 30001,
 DEFINE_int32(server_port, 9000,
              "Port to use for status server to receive inbound datagrams "
              "and send outbound unicast datagrams.");
-DEFINE_bool(measure_latency, false,
-            "Set if measuring client-server latency.");
+DEFINE_bool(include_timestamp, true,
+            "Include a 'seconds nanoseconds' timestamp line at the top of "
+            "each outbound datagram.");
 
 StatusServer::StatusServer() :
     data_mutex_(),
@@ -62,8 +63,8 @@ void StatusServer::RespondData() {
 
 void StatusServer::SendData(const udp::endpoint& destination,
                             udp::socket& socket) {
-  std::stringstream sstr;
-  if (FLAGS_measure_latency) {
+  std::ostringstream sstr;
+  if (FLAGS_include_timestamp) {
     struct timespec curtime;
     clock_gettime(CLOCK_REALTIME, &curtime);
     sstr << curtime.tv_sec << " " << curtime.tv_nsec << "\n";
