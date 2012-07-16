@@ -12,10 +12,24 @@
 
 namespace asio = boost::asio;
 
+DEFINE_bool(multicast, true,
+            "Get updates via multicast rather than direct requests.");
+DEFINE_string(multicast_address, "239.255.0.1",
+              "IP address of multicast group to join for status datagrams.");
+DEFINE_string(multicast_listen_address, "0.0.0.0",
+              "IP address on which to receive multicast datagrams.");
+DEFINE_int32(multicast_port, 30001,
+             "Port on which to receive multicast datagrams.");
+DEFINE_string(server_name, "192.168.1.7",
+              "IP address or DNS name of the status server to query.");
+DEFINE_int32(server_port, 9000,
+             "Port to connect to on status server to request unicast data.");
+DEFINE_bool(include_timestamp, true,
+            "Indicates that status datagrams contain a timestamp line of "
+            "the form 'seconds nanoseconds' preceeding the payload.");
 DEFINE_bool(measure_latency, false,
-            "Set if measuring client-server latency.");
+            "Show statistics about client-server latency.");
 
-const int StatusClient::kDefaultServerPort = 9000;
 const int StatusClient::kRecvBufferSize = 2048;
 
 struct timespec MakeTimespecFromString(const std::string& str) {
@@ -70,20 +84,51 @@ std::string MakeTimespecString(struct timespec ts) {
 }
 
 
-StatusClient::StatusClient(std::string server_name,
-                           int server_port=kDefaultServerPort) :
-    server_name_(server_name),
-    server_port_(server_port),
+StatusClient::StatusClient() :
     data_mutex_(),
     data_(),
     io_service_(),
     socket_(io_service_),
+    multicast_socket_(io_service_),
     remote_endpoint_(),
+    multicast_endpoint_(),
     send_buffer_(1, '\0'),
     recv_buffer_(kRecvBufferSize),
+    multicast_recv_buffer_(kRecvBufferSize),
     request_send_time_(),
+    worker_(NULL),
     io_thread_()
 {
+  if (FLAGS_multicast) {
+    // Maybe should just always do this, in initializer list?
+    multicast_endpoint_.address(
+        asio::ip::address::from_string(FLAGS_multicast_listen_address));
+    multicast_endpoint_.port(FLAGS_multicast_port);
+  }
+}
+
+std::string StatusClient::GetData() {
+  {
+    boost::lock_guard<boost::mutex> lock(data_mutex_);
+    return data_;
+  }
+}
+
+void StatusClient::SubscribeData() {
+  multicast_socket_.async_receive_from(
+      asio::buffer(multicast_recv_buffer_), multicast_endpoint_,
+      boost::bind(&StatusClient::HandleSubscribe, this,
+                  asio::placeholders::error,
+                  asio::placeholders::bytes_transferred));
+}
+
+void StatusClient::HandleSubscribe(const asio::error_code& error,
+                                  std::size_t bytes_transferred) {
+  if (DEBUG) std::cout << "Handling subscribe!\n";
+  if (!error) {
+    ParseDataFromBuffer(multicast_recv_buffer_, bytes_transferred);
+  }
+  SubscribeData();
 }
 
 void StatusClient::SendRequest() {
@@ -100,33 +145,45 @@ void StatusClient::HandleRequest(const asio::error_code& error,
   if (DEBUG) std::cout << "Handling request!\n";
   clock_gettime(CLOCK_REALTIME, &request_send_time_);
   if (!error) {
-    socket_.async_receive_from(
-        asio::buffer(recv_buffer_), remote_endpoint_,
-        boost::bind(&StatusClient::HandleResponse, this,
-                    asio::placeholders::error,
-                    asio::placeholders::bytes_transferred));
+    // Now it's the server's turn to send us the data back.
+    ReceiveResponse();
   }
+}
+
+void StatusClient::ReceiveResponse() {
+  socket_.async_receive_from(
+      asio::buffer(recv_buffer_), remote_endpoint_,
+      boost::bind(&StatusClient::HandleResponse, this,
+                  asio::placeholders::error,
+                  asio::placeholders::bytes_transferred));
 }
 
 void StatusClient::HandleResponse(const asio::error_code& error,
                                   std::size_t bytes_transferred) {
   if (DEBUG) std::cout << "Handling response!\n";
   if (!error) {
-    std::string payload(recv_buffer_.begin(),
-                        recv_buffer_.begin() + bytes_transferred);
-    size_t start_pos = 0;
+    ParseDataFromBuffer(recv_buffer_, bytes_transferred);
+  }
+  // Immediately send another request. TODO: optional delay here?
+  SendRequest();
+}
+
+void StatusClient::ParseDataFromBuffer(const std::vector<char>& buffer,
+                                       size_t num_bytes) {
+  std::string payload(buffer.begin(), buffer.begin() + num_bytes);
+  size_t start_pos = 0;
+  if (FLAGS_include_timestamp) {
+    size_t nl_pos = payload.find('\n');
+    start_pos = nl_pos + 1;
     if (FLAGS_measure_latency) {
-      size_t nl_pos = payload.find('\n');
-      start_pos = nl_pos + 1;
       std::string timestamp = payload.substr(0, nl_pos);
       MeasureDelay(timestamp);
     }
-    {
-      boost::lock_guard<boost::mutex> lock(data_mutex_);
-      data_.assign(payload, start_pos, payload.size());
-    }
   }
-  SendRequest();
+  {
+    boost::lock_guard<boost::mutex> lock(data_mutex_);
+    data_.assign(payload, start_pos, payload.size());
+  }
 }
 
 void StatusClient::MeasureDelay(const std::string& timestamp) {
@@ -134,41 +191,64 @@ void StatusClient::MeasureDelay(const std::string& timestamp) {
   struct timespec client_time;
   clock_gettime(CLOCK_REALTIME, &client_time);
   struct timespec plain_diff = GetTimespecDiff(client_time, server_time);
-  struct timespec rt_time_diff = GetTimespecDiff(client_time,
-                                                 request_send_time_);
-  struct timespec oneway_time_diff = ScaleTimespec(rt_time_diff, 0.5);
-  struct timespec clock_diff = GetTimespecDiff(plain_diff,
-                                               oneway_time_diff);
-  std::cerr << "RT latency: " << MakeTimespecString(rt_time_diff) << " - "
-            << "OW latency: " << MakeTimespecString(oneway_time_diff) << " - "
-            << "Clock diff: " << MakeTimespecString(clock_diff) << "\n";
+
+  if (FLAGS_multicast) {
+    std::cerr << "Latency + clock offset: "
+              << MakeTimespecString(plain_diff) << "\n";
+  } else {
+    struct timespec rt_time_diff = GetTimespecDiff(client_time,
+                                                   request_send_time_);
+    struct timespec oneway_time_diff = ScaleTimespec(rt_time_diff, 0.5);
+    struct timespec clock_diff = GetTimespecDiff(plain_diff,
+                                                 oneway_time_diff);
+    std::cerr
+        << "RT latency: " << MakeTimespecString(rt_time_diff) << " - "
+        << "OW latency: " << MakeTimespecString(oneway_time_diff) << " - "
+        << "Clock diff: " << MakeTimespecString(clock_diff) << "\n";
+  }
 }
 
 void StatusClient::Run() {
-  if (DEBUG) std::cout << "Resolving status server name.\n";
-  udp::resolver resolver(io_service_);
-  std::stringstream port_string;
-  port_string << server_port_;  // Convert int to string.
-  udp::resolver::query query(udp::v4(), server_name_,
-                             port_string.str());
-  remote_endpoint_ = *resolver.resolve(query);
+  if (FLAGS_multicast) {
+    if (DEBUG) std::cout << "Opening UDP multicast socket.\n";
+    multicast_socket_.open(udp::v4());
+    // Allow multiple processes to bind to the same address.
+    multicast_socket_.set_option(asio::ip::udp::socket::reuse_address(true));
+    multicast_socket_.bind(multicast_endpoint_);
+    asio::ip::address multicast_address =
+        asio::ip::address::from_string(FLAGS_multicast_address);
+    multicast_socket_.set_option(
+        asio::ip::multicast::join_group(multicast_address));
+    if (DEBUG) std::cout << "Starting multicast io_service worker.\n";
+    worker_ = new asio::io_service::work(io_service_);
+    if (DEBUG) std::cout << "Subscribing for initial data via multicast.\n";
+    SubscribeData();
 
-  if (DEBUG) std::cout << "Opening UDP socket.\n";
-  socket_.open(udp::v4());
-  if (DEBUG) std::cout << "Sending initial request asynchronously...\n";
-  SendRequest();
+  } else {
+    if (DEBUG) std::cout << "Resolving status server name.\n";
+    udp::resolver resolver(io_service_);
+    std::stringstream port_string;
+    port_string << FLAGS_server_port;  // Convert int to string.
+    udp::resolver::query query(udp::v4(), FLAGS_server_name,
+                               port_string.str());
+    remote_endpoint_ = *resolver.resolve(query);
+
+    if (DEBUG) std::cout << "Opening UDP socket.\n";
+    socket_.open(udp::v4());
+    if (DEBUG) std::cout << "Sending initial request asynchronously...\n";
+    SendRequest();
+  }
+
   if (DEBUG) std::cout << "Launching IO processing thread...\n";
   io_thread_ = asio::thread(boost::bind(&asio::io_service::run, &io_service_));
 }
 
 void StatusClient::Stop() {
+  if (worker_ != NULL) {
+    delete worker_;
+    worker_ = NULL;
+  }
   io_thread_.join();
   socket_.close();
-}
-
-std::string StatusClient::GetData() {
-  {
-    boost::lock_guard<boost::mutex> lock(data_mutex_);
-    return data_;
-  }
+  multicast_socket_.close();
 }

@@ -14,10 +14,6 @@
 #define INI_FILE_PATH "config.ini"
 #define U2D_DEV_NAME "/dev/ttyUSB0"
 
-DEFINE_string(server_name, "192.168.1.7",
-              "IP address or DNS name of the status server to query.");
-DEFINE_int32(server_port, 9000,
-             "Port on the status server to connect to.");
 DEFINE_double(fps_target, 15, "Target frames per second to run at.");
 
 DEFINE_string(goal_object, "",
@@ -63,7 +59,7 @@ void LocalizedExplorer::LocalizedObject::ParseFromString(
 
 LocalizedExplorer::LocalizedExplorer() :
     cm730_(NULL),
-    client_(FLAGS_server_name, FLAGS_server_port),
+    client_(),
     pan_controller_(FLAGS_pan_pgain, FLAGS_pan_igain, FLAGS_pan_dgain),
     tilt_controller_(FLAGS_tilt_pgain, FLAGS_tilt_igain, FLAGS_tilt_dgain) {
 }
