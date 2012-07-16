@@ -19,7 +19,7 @@ class StatusServer {
  public:
   StatusServer();
   ~StatusServer() {}
-  void SetData(const std::string& data);
+  void UpdateData(const std::string& data);
   void Run();
   void Stop();
 

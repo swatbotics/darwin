@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
   while (true) {
     ss.str(std::string());
     ss << message_count++;
-    server.SetData(ss.str());
+    server.UpdateData(ss.str());
     if (!FLAGS_quiet) std::cout << "Data = " << ss.str() << "\n";
     usleep(1000 * 1000 * FLAGS_update_interval);
   }

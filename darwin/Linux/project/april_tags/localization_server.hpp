@@ -18,7 +18,7 @@ class LocalizationServer {
     LocalizationServerCallback(StatusServer* obj) : obj_(obj) {}
     ~LocalizationServerCallback() {}
     void operator() (const std::string& data) {
-      obj_->SetData(data);
+      obj_->UpdateData(data);
     }
     StatusServer* obj_;
   };

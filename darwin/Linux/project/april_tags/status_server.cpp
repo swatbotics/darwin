@@ -44,7 +44,7 @@ StatusServer::StatusServer() :
   }
 }
 
-void StatusServer::SetData(const std::string& data) {
+void StatusServer::UpdateData(const std::string& data) {
   {
     boost::lock_guard<boost::mutex> lock(data_mutex_);
     data_ = data;
