@@ -204,8 +204,33 @@ GLineSegment2D lsqFitXYW(const XYWArray& points) {
 
 };
 
+at::real area(const at::Point* p, size_t n) {
+
+  if (n < 3) { return 0; }
+
+  at::real a = 0;
+  
+  for (size_t i=0; i<n-1; ++i) {
+
+    const at::Point& p0 = p[i];
+    const at::Point& p1 = p[i+1];
+
+    a += p0.x * p1.y - p0.y * p1.x;
+
+  }
+
+  if (a<0) { a = -a; }
+
+  return at::real(0.5)*a;
+  
+
+}
 
 Quad::Quad() {}
+
+at::real Quad::area() const {
+  return ::area(p, 4);
+}
 
 Quad::Quad(const at::Point pp[4], const at::Point& oc, at::real op):
   opticalCenter(oc), observedPerimeter(op)

@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <math.h>
 #include <stdio.h>
+#include <assert.h>
 #include "MathUtil.h"
 #include "Geometry.h"
 #include "GrayModel.h"
@@ -63,8 +64,10 @@ static const at::real kDefaultMaxQuadAspectRatio = 32;
 static const bool     kDefaultRefineQuads = false;
 static const bool     kDefaultRefineBad = false;
 static const bool     kDefaultNewQuadAlgorithm = false;
+static const at::real kDefaultAdaptiveThresholdValue = 10;
+static const int      kDefaultAdaptiveThresholdRadius = 9;
 
-#ifdef HAS_CGAL
+#ifdef HAVE_CGAL
 static const bool     kDefaultHasNewQuadAlgorithm = true;
 #else
 static const bool     kDefaultHasNewQuadAlgorithm = false;
@@ -111,7 +114,8 @@ void TagDetector::reportTimers() {
   std::cout << "report averaged over " << num_iterations << " frames with " << num_detections << " detections (" << (double(num_detections)/num_iterations) << " per frame)\n\n";
 
   for (TimingLookup::const_iterator i=timers.begin(); i!=timers.end(); ++i) {
-    std::cout << std::setw(12) << (i->second.run / num_iterations);
+    int usec = 1e6 * i->second.run / num_iterations;
+    std::cout << std::setw(12) << usec << " usec";
     if (i->first.value) { std::cout << "  "; }
     if (i->first.index) { std::cout << "  "; }
     std::cout << " - " << i->second.desc << "\n";
@@ -249,6 +253,8 @@ TagDetectorParams::TagDetectorParams() :
   minimumSegmentSize(kDefaultMinimumSegmentSize),
   minimumTagSize(kDefaultMinimumTagSize),
   maxQuadAspectRatio(kDefaultMaxQuadAspectRatio),
+  adaptiveThresholdValue(kDefaultAdaptiveThresholdValue),
+  adaptiveThresholdRadius(kDefaultAdaptiveThresholdRadius),
   refineQuads(kDefaultRefineQuads),
   refineBad(kDefaultRefineBad),
   newQuadAlgorithm(kDefaultNewQuadAlgorithm),
@@ -378,6 +384,234 @@ static bool ccw(const at::Point& p1,
 
 }
 
+
+
+
+void TagDetector::getQuads_MZ(const Images& images,
+                              QuadArray& quads) const {
+
+#ifndef HAVE_CGAL
+
+  std::cerr << "Can't run new thing, no CGAL!\n";
+  exit(1);
+
+#else
+
+  START_PROFILE(2, 0, "threshold image");
+
+  cv::Mat thresh;
+
+  cv::adaptiveThreshold(images.origBW8, thresh, 255, 
+                        cv::ADAPTIVE_THRESH_MEAN_C,
+                        cv::THRESH_BINARY_INV, 
+                        params.adaptiveThresholdRadius, 
+                        params.adaptiveThresholdValue);
+
+
+  if (debug) {
+    emitDebugImage(debugWindowName,
+                   2, 0, debugNumberFiles,
+                   "Thresholded",
+                   thresh,
+                   ScaleNone, true);
+  }
+
+  END_PROFILE(2, 0);
+
+  START_PROFILE(3, 0, "find contours");
+
+  std::vector< std::vector< cv::Point2i > > contours;
+  std::vector< cv::Vec4i > hierarchy;
+
+  cv::findContours(thresh, contours, hierarchy,
+                   CV_RETR_CCOMP,
+                   CV_CHAIN_APPROX_SIMPLE);
+
+
+  if (debug) {
+
+    cv::Mat rgbu = images.origRGB / 2 + 127;
+    int scl = resizeToDisplay(rgbu, rgbu);
+
+    const ScalarVec& ccolors = getCColors();
+    at::Point delta(0.5, 0.5);
+
+    for (size_t i=0; i<contours.size(); ++i) {
+      cv::Scalar color = ccolors[i % ccolors.size() ];
+      if (hierarchy[i][3] < 0) {
+        //cv::drawContours( rgbu, contours, i, color, 1, CV_AA );
+        for (size_t j=0; j<contours[i].size(); ++j) {
+
+          size_t jj = (j+1) % contours[i].size();
+
+          at::Point cj = contours[i][j];
+          at::Point cjj = contours[i][jj];
+
+          cv::line(rgbu,
+                   (cj+delta)*scl,
+                   (cjj+delta)*scl,
+                   color,
+                   1, CV_AA);
+        }
+      }
+    }
+
+    emitDebugImage(debugWindowName,
+                   3, 0, debugNumberFiles,
+                   "Contours",
+                   rgbu,
+                   ScaleNone, false);
+
+
+  }
+
+  END_PROFILE(3, 0);
+
+  START_PROFILE(4, 0, "compute convex hulls");
+
+  std::vector< std::vector< cv::Point2i > > hulls;
+    
+  for (size_t i=0; i<contours.size(); ++i) {
+    if (hierarchy[i][3] < 0 && contours[i].size() >= 4) {
+      std::vector<cv::Point2i> hull;
+      cv::convexHull( contours[i], hull );
+      hulls.push_back(hull);
+    }
+  }
+
+  if (debug) {
+
+    cv::Mat rgbu = images.origRGB / 2 + 127;
+    int scl = resizeToDisplay(rgbu, rgbu);
+
+    const ScalarVec& ccolors = getCColors();
+    at::Point delta(0.5, 0.5);
+
+    for (size_t i=0; i<hulls.size(); ++i) {
+      cv::Scalar color = ccolors[i % ccolors.size() ];
+      //cv::drawContours( rgbu, contours, i, color, 1, CV_AA );
+      for (size_t j=0; j<hulls[i].size(); ++j) {
+
+        size_t jj = (j+1) % hulls[i].size();
+
+        at::Point cj = hulls[i][j];
+        at::Point cjj = hulls[i][jj];
+
+        cv::line(rgbu,
+                 (cj+delta)*scl,
+                 (cjj+delta)*scl,
+                 color,
+                 1, CV_AA);
+
+      }
+    }
+
+    emitDebugImage(debugWindowName,
+                   4, 0, debugNumberFiles,
+                   "Hulls",
+                   rgbu,
+                   ScaleNone, false);
+
+
+  }
+
+  END_PROFILE(4, 0);
+
+  START_PROFILE(5, 0, "find maximum inscribed quadrilaterals");
+
+  typedef CGAL::Simple_cartesian<int>   K;
+  typedef K::Point_2                    Point;
+  typedef CGAL::Polygon_2<K>            Polygon_2;
+  
+  for (size_t i=0; i<hulls.size(); ++i) {
+    
+    Polygon_2 cpoly;
+    for (size_t j=0; j<hulls[i].size(); ++j) {
+      cpoly.push_back( Point( hulls[i][j].x, hulls[i][j].y ) );
+    }
+    
+    Polygon_2 k_gon;
+    CGAL::maximum_area_inscribed_k_gon_2( cpoly.vertices_begin(), 
+                                          cpoly.vertices_end(), 4, 
+                                          std::back_inserter(k_gon));
+
+    at::Point p[4];
+    
+    bool ok = true;
+
+    for (int i=0; i<4; ++i) {
+      const Point& ki = k_gon[4-i-1];
+      if (ki.x() <= 1 || ki.x() >= images.orig.cols-2 || 
+          ki.y() <= 1 || ki.y() >= images.orig.rows-2) {
+        ok = false;
+        break;
+      }
+      p[i] = at::Point( ki.x() + 0.5, ki.y() + 0.5 );
+    }
+
+    if (ok && ccw(p[0], p[1], p[2])) {
+      std::swap(p[0], p[3]);
+      std::swap(p[1], p[2]);
+    }
+
+    at::real observedPerimeter = 0;
+    at::real dmax = 0;
+    at::real dmin = images.orig.cols + images.orig.rows;
+
+    if (ok) {
+
+      for (int i=0; i<4; ++i) {
+        int j = (i+1)%4;
+        at::Point diff = p[i] - p[j];
+        at::real dij = sqrt(diff.dot(diff));
+        dmax = std::max(dmax, dij);
+        if (dij < params.minimumTagSize) {
+          ok = false;
+          break;
+        }
+        observedPerimeter += dij;
+      }
+
+      for (int i=0; i<4; ++i) {
+        for (int j=0; j<i; ++j) {
+          at::Point diff = p[i] - p[j];
+          at::real dij = sqrt(diff.dot(diff));
+          dmin = std::min(dmin, dij);
+        }
+      }
+
+    }
+
+    if (ok && dmax / dmin < 6) {
+      quads.push_back(new Quad(p, images.opticalCenter, observedPerimeter));
+    }
+    
+  }
+
+  END_PROFILE(5, 0);
+
+#endif
+
+}
+
+const bool refine_debug = false;
+const int refine_max_iter = 10;
+const at::real refine_max_grad = 1e-3;
+
+void TagDetector::refineQuadTT(const Images& images,
+                               Quad& quad) const {
+
+    refineQuad( images.origBW8, 
+                images.gx, images.gy, 
+                quad.p, tpoints, 
+                refine_debug,
+                refine_max_iter,
+                refine_max_grad );
+
+    quad.recomputeHomography();
+
+}
+
 struct DSegment {
 
   at::Point p;      // starting endpoint
@@ -421,179 +655,165 @@ struct DSegment {
   
 };
 
+#define refineQuad(i, q) refineQuadLSQ(i, q)
+
+void TagDetector::refineQuadL(const Images& images,
+                              Quad& quad) const {
 
 
-void TagDetector::getQuads_MZ(const Images& images,
-                              QuadArray& quads) const {
+  int border = 3;
+  at::real edge = 1;
+  at::real outer = 2;
+  at::real inner = 1.5;
 
-#ifndef HAVE_CGAL
+  cv::Size sz = images.orig.size();
+  cv::Rect r = boundingRect(quad.p, sz);
+  dilate(r, border, sz);
 
-  std::cerr << "Can't run new thing, no CGAL!\n";
-  exit(1);
-
-#else
-
-  START_PROFILE(2, 0, "threshold image");
-
-  cv::Mat thresh;
-
-  cv::adaptiveThreshold(images.origBW8, thresh, 255, 
-                        cv::ADAPTIVE_THRESH_MEAN_C,
-                        cv::THRESH_BINARY_INV, 9, 25);
-
-
-  if (debug) {
-    emitDebugImage(debugWindowName,
-                   2, 0, debugNumberFiles,
-                   "Thresholded",
-                   thresh,
-                   ScaleNone, true);
+  DSegment dsegs[4];
+    
+  for (int i=0; i<4; ++i) {
+    int ii = (i+1)%4;
+    dsegs[i] = DSegment(quad.p[i], quad.p[ii]);
   }
 
-  END_PROFILE(2, 0);
+  int x1 = r.x + r.width;
+  int y1 = r.y + r.height;
 
-  START_PROFILE(3, 0, "find contours");
+  XYWArray xywarrays[4];
 
-  std::vector< std::vector< cv::Point2i > > contours;
-  std::vector< cv::Vec4i > hierarchy;
+  at::Point delta(0.5, 0.5);
 
-  cv::findContours(thresh, contours, hierarchy,
-                   CV_RETR_CCOMP,
-                   CV_CHAIN_APPROX_SIMPLE);
+  at::real imax = 0;
+  at::real imin = 255;
 
+  for (int y=r.y; y<y1; ++y) {
+    for (int x=r.x; x<x1; ++x) {
+      at::real ixy = images.origBW8(y,x);
+      imax = std::max(imax, ixy);
+      imin = std::min(imin, ixy);
+    }
+  }
 
-  if (debug) {
+  at::real iscl = 1/(imax-imin);
+      
+  for (int y=r.y; y<y1; ++y) {
+    for (int x=r.x; x<x1; ++x) {
+      at::Point p = at::Point(x,y) + delta;
+      for (int i=0; i<4; ++i) {
+        if (dsegs[i].query(p, edge, -outer, inner)) {
+          at::real ixy = (images.origBW8(y,x)-imin)*iscl;
+          if (ixy >= 0.7) { 
+            xywarrays[i].push_back( XYW(p.x, p.y,  1) );
+          } else if (ixy <= 0.3) {
+            xywarrays[i].push_back( XYW(p.x, p.y, -1) );
+          }
+        }
+      }
+    }
+  }
 
-    cv::Mat rgbu = images.origRGB / 2 + 127;
+  at::Vec3 lvecs[4];
+
+  for (int i=0; i<4; ++i) {
+
+    const XYWArray& pts = xywarrays[i];
+
+    at::Vec3 l(-dsegs[i].n.x, -dsegs[i].n.y,
+               dsegs[i].p.dot(dsegs[i].n));
+
+    const at::real m = 0.5;
+
+    for (int iter=0; iter<50; ++iter) {
+
+      at::Vec3 g(0,0,0);
+      at::real loss = 0;
+      
+      for (size_t j=0; j<pts.size(); ++j) {
+        
+        at::Vec3 pj(pts[j].x, pts[j].y, 1);
+        at::real cj = pts[j].w;
+
+        at::real u = l.dot(pj) * cj;
+        
+        if (u < m) { 
+          loss += m-u; 
+          g += cj*pj;
+        }
+        
+      }
+
+      //std::cout << "at iter " << iter << ", loss=" << loss << ", g=" << g[0] << "," << g[1] << "," << g[2] << "\n";
+
+      l += at::real(1e-7)*g;
+      l *= 1 / sqrt( l[0]*l[0] + l[1]*l[1] );
+
+    }
+
+    lvecs[i] = l;
+
+  }
+
+  for (int i=0; i<4; ++i) {
+    at::Vec3 pi = lvecs[i].cross(lvecs[(i+1)%4]);
+    quad.p[i] = at::Point(pi[0]/pi[2], pi[1]/pi[2]);
+    //std::cout << "p[i] = " << p[i] << ", newp[i] = " << newp[i] << "\n";
+  }
+
+  quad.recomputeHomography();
+
+  if (debug && 0) {
+
+    cv::Mat_<cv::Vec3b> rgbu = images.origRGB/2 + 127;
+    cv::Mat_<cv::Vec3b> small(rgbu, r);
+    int scl = resizeToDisplay(small, small);
+
+    at::Point delta = at::Point(-r.x, -r.y);
+    at::Point lx(0.2*scl, 0);
+    at::Point ly(0, 0.2*scl);
 
     const ScalarVec& ccolors = getCColors();
 
+    for (int i=0; i<4; ++i) {
 
-    for (size_t i=0; i<contours.size(); ++i) {
-      cv::Scalar color = ccolors[i % ccolors.size() ];
-      if (hierarchy[i][3] < 0) {
-        cv::drawContours( rgbu, contours, i, color, 1, CV_AA );
+      const cv::Scalar& color = ccolors[ i % ccolors.size() ];
+
+      cv::line( small, 
+                (dsegs[i].p+delta)*scl, 
+                (dsegs[i].p+delta+dsegs[i].length*dsegs[i].t)*scl, 
+                color, 1, CV_AA );
+
+      cv::line( small, 
+                (quad.p[i]+delta)*scl, 
+                (quad.p[(i+1)%4]+delta)*scl, 
+                color, 2, CV_AA );
+
+
+      for (size_t j=0; j<xywarrays[i].size(); ++j) {
+        const XYW& pj = xywarrays[i][j];
+        at::Point p = (at::Point(pj.x, pj.y) + delta)*scl;
+        cv::line( small, p-lx, p+lx, color, 1, CV_AA);
+        if (pj.w > 0) {
+          cv::line( small, p-ly, p+ly, color, 1, CV_AA);
+        }
       }
     }
 
-    emitDebugImage(debugWindowName,
-                   3, 0, debugNumberFiles,
-                   "Contours",
-                   rgbu,
-                   ScaleNone, true);
-
+    emitDebugImage(debugWindowName, 
+                   8, 0, debugNumberFiles,
+                   "refineQuadL",
+                   small, ScaleNone, false);
+    
 
   }
 
-  END_PROFILE(3, 0);
 
-  START_PROFILE(4, 0, "compute convex hulls");
-
-  std::vector< std::vector< cv::Point2i > > hulls;
-    
-  for (size_t i=0; i<contours.size(); ++i) {
-    if (hierarchy[i][3] < 0 && contours[i].size() >= 4) {
-      std::vector<cv::Point2i> hull;
-      cv::convexHull( contours[i], hull );
-      hulls.push_back(hull);
-    }
-  }
-
-  if (debug) {
-
-    cv::Mat rgbu = images.origRGB / 2 + 127;
-
-    const ScalarVec& ccolors = getCColors();
-
-    for (size_t i=0; i<hulls.size(); ++i) {
-      cv::Scalar color = ccolors[i % ccolors.size() ];
-      cv::drawContours( rgbu, hulls, i, color, 1, CV_AA );
-    }
-
-    emitDebugImage(debugWindowName,
-                   4, 0, debugNumberFiles,
-                   "Hulls",
-                   rgbu,
-                   ScaleNone, true);
-
-
-  }
-
-  END_PROFILE(4, 0);
-
-  START_PROFILE(5, 0, "find maximum inscribed quadrilaterals");
-
-  typedef CGAL::Simple_cartesian<int>   K;
-  typedef K::Point_2                    Point;
-  typedef CGAL::Polygon_2<K>            Polygon_2;
-  
-  for (size_t i=0; i<hulls.size(); ++i) {
-    
-    Polygon_2 cpoly;
-    for (size_t j=0; j<hulls[i].size(); ++j) {
-      cpoly.push_back( Point( hulls[i][j].x, hulls[i][j].y ) );
-    }
-    
-    Polygon_2 k_gon;
-    CGAL::maximum_area_inscribed_k_gon_2( cpoly.vertices_begin(), 
-                                          cpoly.vertices_end(), 4, 
-                                          std::back_inserter(k_gon));
-
-    at::Point p[4];
-    
-    for (int i=0; i<4; ++i) {
-      const Point& ki = k_gon[4-i-1];
-      p[i] = at::Point( ki.x() + 0.5, ki.y() + 0.5 );
-    }
-
-    if (ccw(p[0], p[1], p[2])) {
-      std::swap(p[0], p[3]);
-      std::swap(p[1], p[2]);
-    }
-
-    at::real observedPerimeter = 0;
-    bool ok = true;
-    at::real dmax = 0;
-
-    for (int i=0; i<4; ++i) {
-      int j = (i+1)%4;
-      at::Point diff = p[i] - p[j];
-      at::real dij = sqrt(diff.dot(diff));
-      dmax = std::max(dmax, dij);
-      if (dij < params.minimumTagSize) {
-        ok = false;
-        break;
-      }
-      observedPerimeter += dij;
-    }
-
-    at::real dmin = images.orig.cols + images.orig.rows;
-    for (int i=0; i<4; ++i) {
-      for (int j=0; j<i; ++j) {
-        at::Point diff = p[i] - p[j];
-        at::real dij = sqrt(diff.dot(diff));
-        dmin = std::min(dmin, dij);
-      }
-    }
-
-    if (ok && dmax / dmin < 6) {
-      quads.push_back(new Quad(p, images.opticalCenter, observedPerimeter));
-    }
-    
-  }
-
-  END_PROFILE(5, 0);
-
-#endif
 
 }
 
-const bool refine_debug = false;
-const int refine_max_iter = 10;
-const at::real refine_max_grad = 1e-3;
 
-void TagDetector::refineQuads_MZ(const Images& images,
-                                 QuadArray& quads) const {
+void TagDetector::refineQuads(const Images& images,
+                              QuadArray& quads) const {
 
   START_PROFILE(7,1, "refine quads");
 
@@ -602,14 +822,8 @@ void TagDetector::refineQuads_MZ(const Images& images,
     
     Quad& quad = *(quads[i]);
 
-    refineQuad( images.origBW8, 
-                images.gx, images.gy, 
-                quad.p, tpoints, 
-                refine_debug,
-                refine_max_iter,
-                refine_max_grad );
+    refineQuad( images, quad );
 
-    quad.recomputeHomography();
 
   }
 
@@ -1075,19 +1289,20 @@ void TagDetector::getQuads_AT(const Images& images,
 
   if (debug) {
     cv::Mat rgbu = images.origRGB / 2 + 127;
+    int scl = resizeToDisplay(rgbu, rgbu);
     const ScalarVec& ccolors = getCColors();
     for (size_t i=0; i<segments.size(); ++i) {
       const Segment* seg = segments[i];
       const cv::Scalar& color = ccolors[ i % ccolors.size() ];
       cv::line( rgbu, 
-                cv::Point(seg->x0, seg->y0),
-                cv::Point(seg->x1, seg->y1),
+                scl*at::Point(seg->x0, seg->y0),
+                scl*at::Point(seg->x1, seg->y1),
                 color, 1, CV_AA );
     }
     emitDebugImage(debugWindowName, 
                    5, 0, debugNumberFiles,
                    "Segmented", 
-                   rgbu, ScaleNone, true);
+                   rgbu, ScaleNone, false);
   }
 
   int width = images.fim.cols, height = images.fim.rows;
@@ -1281,7 +1496,7 @@ void TagDetector::process(const cv::Mat& orig,
   if (debug) { debugShowQuads(images, quads, 7, "Quads"); }
 
   if (params.refineQuads) {
-    refineQuads_MZ(images, quads);
+    refineQuads(images, quads);
     if (debug) { debugShowQuads(images, quads, 8, "Refined quads"); }
   } 
 
@@ -1296,61 +1511,191 @@ void TagDetector::process(const cv::Mat& orig,
 
 }
 
+
+void TagDetector::refineQuadLSQ(const Images& images,
+                                Quad& quad) const {
+
+
+  at::real wb = tagFamily.whiteBorder;
+  at::real bb = tagFamily.blackBorder;
+  at::real tag_side = tagFamily.d + 2*bb;
+  at::real tag_area = tag_side * tag_side;
+
+  at::real quad_area = quad.area();
+
+  at::real zoom = sqrt(quad_area / tag_area);
+
+  at::real outer = std::min(zoom*wb, at::real(2));
+  at::real inner = std::max(at::real(0.25)*zoom*bb, at::real(0.75));
+  at::real edge  = std::max(at::real(0.2)*zoom*bb, at::real(0.5));
+
+
+  /*
+  at::real outer = 1.5;
+  at::real inner = 0.75;
+  at::real edge  = 0.5;
+  */
+
+  int border = outer+1;
+
+  // get the bounding box and dilate it
+  cv::Size sz = images.orig.size();
+  cv::Rect r = boundingRect(quad.p, sz);
+  dilate(r, border, sz);
+
+
+  DSegment dsegs[4];
+
+  for (int i=0; i<4; ++i) {
+    int ii = (i+1)%4;
+    dsegs[i] = DSegment(quad.p[i], quad.p[ii]);
+  }
+
+  int x1 = r.x + r.width;
+  int y1 = r.y + r.height;
+
+  XYWArray xywarrays[4];
+
+  at::Point delta(0.5, 0.5);
+
+  for (int y=r.y; y<y1; ++y) {
+    for (int x=r.x; x<x1; ++x) {
+      at::Point p = at::Point(x,y) + delta;
+      at::real gx = images.gx(y,x)/255;
+      at::real gy = images.gy(y,x)/255;
+      at::real gm = gx*gx + gy*gy;
+      for (int i=0; i<4; ++i) {
+        if (dsegs[i].query(p, edge, -outer, inner)) {
+          xywarrays[i].push_back( XYW(p.x, p.y, gm) );
+        }
+      }
+    }
+  }
+
+  if (debug && 0) {
+
+    cv::Mat_<cv::Vec3b> rgbu = images.origRGB/2 + 127;
+
+    cv::Rect rect = boundingRect(quad.p, rgbu.size());
+    cv::Mat_<cv::Vec3b> small = subimageWithBorder(rgbu, rect, border);
+
+    at::Point delta = at::Point(border-rect.x, border-rect.y);
+    
+    for (int i=0; i<4; ++i) {
+
+      const ScalarVec& ccolors = getCColors();
+      const cv::Scalar& color = ccolors[i];
+      const cv::Vec3b vc(color[0], color[1], color[2]);      
+
+      std::cout << "zoom = " << zoom << ", outer = " << outer << " inner = " << inner << "\n";
+
+      for (size_t j=0; j<xywarrays[i].size(); ++j) {
+        const XYW& pj = xywarrays[i][j];
+        at::real f = pj.w;
+        if (f > 1) { f = 1; }
+        int x = pj.x + delta.x;
+        int y = pj.y + delta.y;
+        if (x >= 0 && x < small.cols &&
+            y >= 0 && y < small.rows) {
+          small(y, x) = (1-f)*small(y, x) + f*vc;
+        }
+      }
+        
+    }
+    
+    emitDebugImage(debugWindowName,
+                   7, 0, debugNumberFiles,
+                   "Quad clusters",
+                   small, ScaleNone, true);
+
+  }
+  
+  GLineSegment2D lines[4];
+
+  for (int i=0; i<4; ++i) {
+    lines[i] = lsqFitXYW(xywarrays[i]);
+  }
+
+  at::Point pnew[4];
+  bool ok = true;
+
+  for (int i=0; i<4; ++i) {
+    if (!intersect(lines[i], lines[(i+1)%4], pnew[i])) {
+      ok = false;
+      break;
+    }
+  }
+
+  if (ok) {
+    for (int i=0; i<4; ++i) {
+      quad.p[i] = pnew[i];
+    }
+    quad.recomputeHomography();
+  }
+  
+
+}
+
 void TagDetector::debugShowQuads(const Images& images,
                                  const QuadArray& quads,
                                  int step, const std::string& label) const {
 
-  cv::Mat rgbu = images.origRGB / 2 + 127;
+  if (1) {
 
-  int scl = resizeToDisplay(rgbu, rgbu);
+    cv::Mat rgbu = images.origRGB / 2 + 127;
 
-  const ScalarVec& ccolors = getCColors();
+    int scl = resizeToDisplay(rgbu, rgbu);
 
-  for (size_t i=0; i<quads.size(); ++i) {
-    const Quad& quad = *(quads[i]);
-    cv::Scalar color = ccolors[ i % ccolors.size() ];
-    for (int j=0; j<4; ++j) {
-      cv::line( rgbu, scl*quad.p[j], scl*quad.p[(j+1)%4], color, 1, CV_AA);
-    }
-  }
+    const ScalarVec& ccolors = getCColors();
 
-  emitDebugImage(debugWindowName,
-                 step, 0, debugNumberFiles,
-                 label,
-                 rgbu,
-                 ScaleNone, false);
-  
-  /*
-
-  for (size_t i=0; i<quads.size(); ++i) {
-
-    const Quad& quad = *(quads[i]);
-
-    cv::Mat_<cv::Vec3b> rgbu = images.origRGB * 0.5 + 127;
-
-    cv::Rect rect = boundingRect(quad.p, rgbu.size());
-    int border = 3;
-
-    cv::Mat small = subimageWithBorder(rgbu, rect, border);
-
-    at::Point delta = at::Point(border-rect.x, border-rect.y);
-
-    cv::Mat big;
-    at::real scl = resizeToDisplay(small, big);
-
-    for (int i=0; i<4; ++i) {
-      cv::line(big, (quad.p[i]+delta)*scl, (quad.p[(i+1)%4]+delta)*scl, 
-               CV_RGB(255,0,0), 1, CV_AA);
+    for (size_t i=0; i<quads.size(); ++i) {
+      const Quad& quad = *(quads[i]);
+      cv::Scalar color = ccolors[ i % ccolors.size() ];
+      for (int j=0; j<4; ++j) {
+        cv::line( rgbu, scl*quad.p[j], scl*quad.p[(j+1)%4], color, 1, CV_AA);
+      }
     }
 
     emitDebugImage(debugWindowName,
-                   step, i, debugNumberFiles,
-                   "Quad",
-                   big,
+                   step, 0, debugNumberFiles,
+                   label,
+                   rgbu,
                    ScaleNone, false);
 
+  } else {
+  
+
+    for (size_t i=0; i<quads.size(); ++i) {
+
+      const Quad& quad = *(quads[i]);
+
+      cv::Mat_<cv::Vec3b> rgbu = images.origRGB * 0.5 + 127;
+
+      cv::Rect rect = boundingRect(quad.p, rgbu.size());
+      int border = 3;
+
+      cv::Mat small = subimageWithBorder(rgbu, rect, border);
+
+      at::Point delta = at::Point(border-rect.x, border-rect.y);
+
+      cv::Mat big;
+      at::real scl = resizeToDisplay(small, big);
+
+      for (int i=0; i<4; ++i) {
+        cv::line(big, (quad.p[i]+delta)*scl, (quad.p[(i+1)%4]+delta)*scl, 
+                 CV_RGB(255,0,0), 1, CV_AA);
+      }
+
+      emitDebugImage(debugWindowName,
+                     step, i, debugNumberFiles,
+                     "Quad",
+                     big,
+                     ScaleNone, false);
+
+    }
+
   }
-  */
+
 
 }
 
@@ -1376,16 +1721,9 @@ void TagDetector::decode(const Images& images,
     if (!good && params.refineBad && !params.refineQuads) {
 
       START_PROFILE(8, 1, "refine bad");
+
+      refineQuad( images, quad );
       
-      refineQuad( images.origBW8, 
-                  images.gx, images.gy, 
-                  quad.p, tpoints, 
-                  refine_debug,
-                  refine_max_iter,
-                  refine_max_grad );
-
-      quad.recomputeHomography();
-
       END_PROFILE(8, 1);
 
       decodeQuad(images, quad, i, detections);

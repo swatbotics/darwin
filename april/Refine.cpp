@@ -1,6 +1,184 @@
 #include "Refine.h"
 #include <iostream>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+
+at::Point interpolateH(const at::Mat& H, const at::Point& uv, at::Mat* pdxydh) {
+
+  at::real hx = H[0][0]*uv.x + H[0][1]*uv.y + H[0][2];
+  at::real hy = H[1][0]*uv.x + H[1][1]*uv.y + H[1][2];
+  at::real hw = H[2][0]*uv.x + H[2][1]*uv.y + H[2][2];
+
+  if (pdxydh) {
+
+    at::Mat& dxydh = *pdxydh;
+    if (dxydh.rows != 2 || dxydh.cols != 8) { dxydh = at::Mat(2,8); }
+
+    dxydh[0][0] = uv.x/hw;
+    dxydh[0][1] = uv.y/hw;
+    dxydh[0][2] = 1/hw;
+    dxydh[0][3] = 0;
+    dxydh[0][4] = 0;
+    dxydh[0][5] = 0;
+    at::real tmp0 = hw*hw;
+    dxydh[0][6] = -(hx*uv.x)/tmp0;
+    dxydh[0][7] = -(hx*uv.y)/tmp0;
+    dxydh[1][0] = 0;
+    dxydh[1][1] = 0;
+    dxydh[1][2] = 0;
+    dxydh[1][3] = uv.x/hw;
+    dxydh[1][4] = uv.y/hw;
+    dxydh[1][5] = 1/hw;
+    dxydh[1][6] = -(hy*uv.x)/tmp0;
+    dxydh[1][7] = -(hy*uv.y)/tmp0;
+    
+
+  }
+
+  return at::Point(hx/hw, hy/hw);
+
+
+}
+
+void computeH(const at::Point p[4], at::Mat& H, at::Mat* pdhdp) {
+
+  if (H.rows != 3 || H.cols != 3) { H = at::Mat(3,3); }
+
+  at::real tmp0 = p[0].x*p[2].x;
+  at::real tmp1 = tmp0*p[1].y;
+  at::real tmp2 = p[1].x*p[2].x;
+  at::real tmp3 = p[0].x*p[3].x;
+  at::real tmp4 = p[1].x*p[3].x;
+  at::real tmp5 = tmp4*p[0].y;
+  at::real tmp6 = tmp0*p[3].y;
+  at::real tmp7 = tmp4*p[2].y;
+  at::real tmp8 = tmp1 - tmp2*p[0].y - tmp3*p[1].y + tmp5 - tmp6 + tmp3*p[2].y + tmp2*p[3].y - tmp7;
+  at::real tmp9 = p[1].x*p[2].y;
+  at::real tmp10 = p[2].x*p[1].y;
+  at::real tmp11 = tmp9 - tmp10;
+  at::real tmp12 = p[1].x*p[3].y;
+  at::real tmp13 = tmp11 - tmp12;
+  at::real tmp14 = p[3].x*p[1].y;
+  at::real tmp15 = p[2].x*p[3].y;
+  at::real tmp16 = p[3].x*p[2].y;
+  at::real tmp17 = tmp13 + tmp14 + tmp15 - tmp16;
+  H[0][0] = tmp8/tmp17;
+  at::real tmp18 = p[0].x*p[1].x;
+  at::real tmp19 = p[2].x*p[3].x;
+  at::real tmp20 = tmp18*p[2].y - tmp1 - tmp18*p[3].y + tmp5 + tmp6 - tmp19*p[0].y - tmp7 + tmp19*p[1].y;
+  H[0][1] = -tmp20/tmp17;
+  H[0][2] = p[0].x;
+  at::real tmp21 = p[0].x*p[1].y;
+  at::real tmp22 = p[1].x*p[0].y;
+  at::real tmp23 = tmp22*p[2].y;
+  at::real tmp24 = tmp21*p[3].y;
+  at::real tmp25 = p[2].x*p[0].y;
+  at::real tmp26 = p[3].x*p[0].y;
+  at::real tmp27 = tmp26*p[2].y;
+  at::real tmp28 = tmp10*p[3].y;
+  at::real tmp29 = tmp21*p[2].y - tmp23 - tmp24 + tmp22*p[3].y - tmp25*p[3].y + tmp27 + tmp28 - tmp14*p[2].y;
+  H[1][0] = tmp29/tmp17;
+  at::real tmp30 = p[0].x*p[2].y;
+  at::real tmp31 = tmp23 - tmp25*p[1].y - tmp24 + tmp26*p[1].y + tmp30*p[3].y - tmp27 - tmp9*p[3].y + tmp28;
+  H[1][1] = -tmp31/tmp17;
+  H[1][2] = p[0].y;
+  at::real tmp32 = p[0].x*p[3].y;
+  at::real tmp33 = tmp30 - tmp25 - tmp32 - tmp9 + tmp10 + tmp26 + tmp12 - tmp14;
+  H[2][0] = tmp33/tmp17;
+  at::real tmp34 = tmp21 - tmp22;
+  at::real tmp35 = tmp34 - tmp30 + tmp25 + tmp12 - tmp14 - tmp15 + tmp16;
+  H[2][1] = tmp35/tmp17;
+  H[2][2] = 1;
+
+
+  if (pdhdp) {
+
+    at::Mat& dhdp = *pdhdp;
+    if (dhdp.rows != 8 || dhdp.cols != 8) { dhdp = at::Mat(8,8); }
+
+    dhdp[0][0] = (tmp10 - tmp14 - tmp15 + tmp16)/tmp17;
+    dhdp[0][1] = (-tmp2 + tmp4)/tmp17;
+    at::real tmp36 = p[2].y - p[3].y;
+    at::real tmp37 = tmp17*tmp17;
+    dhdp[0][2] = ((-tmp25 + tmp26 + tmp15 - tmp16)*tmp17 - tmp8*tmp36)/tmp37;
+    at::real tmp38 = -p[2].x + p[3].x;
+    dhdp[0][3] = ((tmp0 - tmp3)*tmp17 - tmp8*tmp38)/tmp37;
+    at::real tmp39 = -p[1].y + p[3].y;
+    dhdp[0][4] = ((tmp34 - tmp32 + tmp12)*tmp17 - tmp8*tmp39)/tmp37;
+    at::real tmp40 = p[1].x - p[3].x;
+    dhdp[0][5] = ((tmp3 - tmp4)*tmp17 - tmp8*tmp40)/tmp37;
+    at::real tmp41 = -tmp21 + tmp22;
+    at::real tmp42 = p[1].y - p[2].y;
+    dhdp[0][6] = ((tmp41 + tmp30 - tmp9)*tmp17 - tmp8*tmp42)/tmp37;
+    at::real tmp43 = -p[1].x + p[2].x;
+    dhdp[0][7] = ((-tmp0 + tmp2)*tmp17 - tmp8*tmp43)/tmp37;
+    dhdp[1][0] = -(tmp13 + tmp15)/tmp17;
+    dhdp[1][1] = -(tmp4 - tmp19)/tmp17;
+    at::real tmp44 = tmp30 - tmp32;
+    dhdp[1][2] = -((tmp44 + tmp26 - tmp16)*tmp17 - tmp20*tmp36)/tmp37;
+    dhdp[1][3] = -((-tmp0 + tmp19)*tmp17 - tmp20*tmp38)/tmp37;
+    dhdp[1][4] = -((-tmp21 + tmp32 - tmp26 + tmp14)*tmp17 - tmp20*tmp39)/tmp37;
+    dhdp[1][5] = -((tmp18 - tmp4)*tmp17 - tmp20*tmp40)/tmp37;
+    dhdp[1][6] = -((tmp22 - tmp25 - tmp9 + tmp10)*tmp17 - tmp20*tmp42)/tmp37;
+    dhdp[1][7] = -((-tmp18 + tmp0)*tmp17 - tmp20*tmp43)/tmp37;
+    dhdp[2][0] = 1;
+    dhdp[2][1] = 0;
+    dhdp[2][2] = 0;
+    dhdp[2][3] = 0;
+    dhdp[2][4] = 0;
+    dhdp[2][5] = 0;
+    dhdp[2][6] = 0;
+    dhdp[2][7] = 0;
+    at::real tmp45 = p[1].y*p[2].y;
+    at::real tmp46 = p[1].y*p[3].y;
+    dhdp[3][0] = (tmp45 - tmp46)/tmp17;
+    dhdp[3][1] = (-tmp9 + tmp12 - tmp15 + tmp16)/tmp17;
+    at::real tmp47 = p[0].y*p[2].y;
+    at::real tmp48 = p[0].y*p[3].y;
+    dhdp[3][2] = ((-tmp47 + tmp48)*tmp17 - tmp29*tmp36)/tmp37;
+    dhdp[3][3] = ((tmp44 + tmp15 - tmp16)*tmp17 - tmp29*tmp38)/tmp37;
+    dhdp[3][4] = ((-tmp48 + tmp46)*tmp17 - tmp29*tmp39)/tmp37;
+    dhdp[3][5] = ((tmp34 + tmp26 - tmp14)*tmp17 - tmp29*tmp40)/tmp37;
+    dhdp[3][6] = ((tmp47 - tmp45)*tmp17 - tmp29*tmp42)/tmp37;
+    dhdp[3][7] = ((tmp41 - tmp25 + tmp10)*tmp17 - tmp29*tmp43)/tmp37;
+    at::real tmp49 = p[2].y*p[3].y;
+    dhdp[4][0] = -(-tmp46 + tmp49)/tmp17;
+    dhdp[4][1] = -(tmp11 + tmp14 - tmp16)/tmp17;
+    dhdp[4][2] = -((tmp47 - tmp49)*tmp17 - tmp31*tmp36)/tmp37;
+    dhdp[4][3] = -((-tmp25 - tmp32 + tmp26 + tmp15)*tmp17 - tmp31*tmp38)/tmp37;
+    at::real tmp50 = p[0].y*p[1].y;
+    dhdp[4][4] = -((-tmp50 + tmp46)*tmp17 - tmp31*tmp39)/tmp37;
+    dhdp[4][5] = -((tmp22 + tmp32 - tmp26 - tmp12)*tmp17 - tmp31*tmp40)/tmp37;
+    dhdp[4][6] = -((tmp50 - tmp47)*tmp17 - tmp31*tmp42)/tmp37;
+    dhdp[4][7] = -((-tmp21 + tmp30 - tmp9 + tmp10)*tmp17 - tmp31*tmp43)/tmp37;
+    dhdp[5][0] = 0;
+    dhdp[5][1] = 1;
+    dhdp[5][2] = 0;
+    dhdp[5][3] = 0;
+    dhdp[5][4] = 0;
+    dhdp[5][5] = 0;
+    dhdp[5][6] = 0;
+    dhdp[5][7] = 0;
+    dhdp[6][0] = tmp36/tmp17;
+    dhdp[6][1] = tmp38/tmp17;
+    dhdp[6][2] = ((-p[2].y + p[3].y)*tmp17 - tmp33*tmp36)/tmp37;
+    dhdp[6][3] = ((p[2].x - p[3].x)*tmp17 - tmp33*tmp38)/tmp37;
+    dhdp[6][4] = ((-p[0].y + p[1].y)*tmp17 - tmp33*tmp39)/tmp37;
+    dhdp[6][5] = ((p[0].x - p[1].x)*tmp17 - tmp33*tmp40)/tmp37;
+    dhdp[6][6] = ((p[0].y - p[1].y)*tmp17 - tmp33*tmp42)/tmp37;
+    dhdp[6][7] = ((-p[0].x + p[1].x)*tmp17 - tmp33*tmp43)/tmp37;
+    dhdp[7][0] = tmp42/tmp17;
+    dhdp[7][1] = tmp43/tmp17;
+    dhdp[7][2] = ((-p[0].y + p[3].y)*tmp17 - tmp35*tmp36)/tmp37;
+    dhdp[7][3] = ((p[0].x - p[3].x)*tmp17 - tmp35*tmp38)/tmp37;
+    dhdp[7][4] = ((p[0].y - p[3].y)*tmp17 - tmp35*tmp39)/tmp37;
+    dhdp[7][5] = ((-p[0].x + p[3].x)*tmp17 - tmp35*tmp40)/tmp37;
+    dhdp[7][6] = ((-p[1].y + p[2].y)*tmp17 - tmp35*tmp42)/tmp37;
+    dhdp[7][7] = ((p[1].x - p[2].x)*tmp17 - tmp35*tmp43)/tmp37;
+
+  }
+
+}
 
 at::Point interpolate(const at::Point p[4], const at::Point& uv, at::Mat* pJ) {
 
@@ -167,7 +345,28 @@ void drawArrow(cv::Mat& m, const at::Point& p, const at::Point& g,
 
 }
 
-cv::Rect boundingRect(const at::Point p[4], const cv::Size sz) {
+void dilate(cv::Rect& r, int b, const cv::Size& sz) {
+
+  int x0 = r.x;
+  int y0 = r.y;
+
+  int x1 = x0 + r.width - 1;
+  int y1 = y0 + r.height - 1;
+
+  x0 = borderInterpolate(x0-b, sz.width, cv::BORDER_REPLICATE);
+  x1 = borderInterpolate(x1+b, sz.width, cv::BORDER_REPLICATE);
+
+  y0 = borderInterpolate(y0-b, sz.height, cv::BORDER_REPLICATE);
+  y1 = borderInterpolate(y1+b, sz.height, cv::BORDER_REPLICATE);
+
+  r.x = x0;
+  r.y = y0;
+  r.width = x1-x0+1;
+  r.height = y1-y0+1;
+
+}
+
+cv::Rect boundingRect(const at::Point p[4], const cv::Size& sz) {
 
   // get the rectangle
   int x0 = p[0].x, x1 = p[0].x, y0 = p[0].y, y1 = p[0].y;
@@ -196,6 +395,9 @@ cv::Rect boundingRect(const at::Point p[4], const cv::Size sz) {
 }
 
 
+#define NEWINTERP
+//#define OLDINTERP
+
 int refineQuad(const cv::Mat& gmat,
                const at::Mat& gx,
                const at::Mat& gy,
@@ -222,6 +424,15 @@ int refineQuad(const cv::Mat& gmat,
 
   bool done = false;
   int iter;
+
+
+#ifdef NEWINTERP
+  at::Mat H(3,3), dhdp(8,8), dxydh(2,8), didh(1,8), didp(8,1);
+#endif
+
+#ifdef OLDINTERP
+  at::Mat dxydp(2,8), didp2(8,1);
+#endif
   
   for (iter=0; iter<max_iter && !done; ++iter) {
 
@@ -250,35 +461,85 @@ int refineQuad(const cv::Mat& gmat,
       
     }
 
+#ifdef NEWINTERP
+    computeH(p, H, &dhdp);
+#endif
+
     for (int i=0; i<tpoints.size(); ++i) {
 
       const TPoint& tpi = tpoints[i];
-      
-      at::Mat Ji(2,8);
 
-      at::Point pi = interpolate(p, tpi.p, &Ji);
+#ifdef NEWINTERP
+      at::Point pi = interpolateH(H, tpi.p, &dxydh);
+#endif
+
+#ifdef OLDINTERP
+      at::Point pi2 = interpolate(p, tpi.p, &dxydp);
+#ifndef NEWINTERP
+      at::Point pi = pi2;
+#endif
+#endif
+
+#if defined(NEWINTERP) && defined(OLDINTERP)
+      std::cout << "these should be equal:\n";
+      std::cout << pi << "\n";
+      std::cout << pi2 << "\n";
+
+      std::cout << "these should be equal:\n";
+      std::cout << dxydh * dhdp << "\n";
+      std::cout << dxydp << "\n";
+#endif
 
       at::real oi = (bicubicInterpolate(gimage, pi) - amin) * ascl;
-
-      at::Point gi = at::Point( bicubicInterpolate(gx, pi), 
-                                bicubicInterpolate(gy, pi) ) * ascl;
-
+      
+      at::Point didxy = at::Point( bicubicInterpolate(gx, pi), 
+                                   bicubicInterpolate(gy, pi) ) * ascl;
+      
       at::real ti = tpi.t;
       
       at::real ei = ti - oi;
       err += ei * ei;
-      
+
+#ifdef NEWINTERP
+
+      didh(0) = didxy.x*dxydh[0][0];
+      didh(1) = didxy.x*dxydh[0][1];
+      didh(2) = didxy.x*dxydh[0][2];
+      didh(3) = didxy.y*dxydh[1][3];
+      didh(4) = didxy.y*dxydh[1][4];
+      didh(5) = didxy.y*dxydh[1][5];
+      didh(6) = didxy.x*dxydh[0][6] + didxy.y*dxydh[1][6];
+      didh(7) = didxy.x*dxydh[0][7] + didxy.y*dxydh[1][7];
+
+      didp(0) = didh(0)*dhdp[0][0] + didh(1)*dhdp[1][0] + didh(2)*dhdp[2][0] + didh(3)*dhdp[3][0] + didh(4)*dhdp[4][0] + didh(6)*dhdp[6][0] + didh(7)*dhdp[7][0];
+      didp(1) = didh(0)*dhdp[0][1] + didh(1)*dhdp[1][1] + didh(3)*dhdp[3][1] + didh(4)*dhdp[4][1] + didh(5)*dhdp[5][1] + didh(6)*dhdp[6][1] + didh(7)*dhdp[7][1];
+      didp(2) = didh(0)*dhdp[0][2] + didh(1)*dhdp[1][2] + didh(3)*dhdp[3][2] + didh(4)*dhdp[4][2] + didh(6)*dhdp[6][2] + didh(7)*dhdp[7][2];
+      didp(3) = didh(0)*dhdp[0][3] + didh(1)*dhdp[1][3] + didh(3)*dhdp[3][3] + didh(4)*dhdp[4][3] + didh(6)*dhdp[6][3] + didh(7)*dhdp[7][3];
+      didp(4) = didh(0)*dhdp[0][4] + didh(1)*dhdp[1][4] + didh(3)*dhdp[3][4] + didh(4)*dhdp[4][4] + didh(6)*dhdp[6][4] + didh(7)*dhdp[7][4];
+      didp(5) = didh(0)*dhdp[0][5] + didh(1)*dhdp[1][5] + didh(3)*dhdp[3][5] + didh(4)*dhdp[4][5] + didh(6)*dhdp[6][5] + didh(7)*dhdp[7][5];
+      didp(6) = didh(0)*dhdp[0][6] + didh(1)*dhdp[1][6] + didh(3)*dhdp[3][6] + didh(4)*dhdp[4][6] + didh(6)*dhdp[6][6] + didh(7)*dhdp[7][6];
+      didp(7) = didh(0)*dhdp[0][7] + didh(1)*dhdp[1][7] + didh(3)*dhdp[3][7] + didh(4)*dhdp[4][7] + didh(6)*dhdp[6][7] + didh(7)*dhdp[7][7];
+
+      g += ei * didp;
+
+#endif
+
+#ifdef OLDINTERP
       for (int j=0; j<8; ++j) {
-        at::real Jij = gi.x * Ji(0, j) + gi.y * Ji(1, j);
-        g(j,0) += ei * Jij;
+        at::real Jij = didxy.x * dxydp(0, j) + didxy.y * dxydp(1, j);
+        didp2(j,0) = Jij;
       }
+#ifndef NEWINTERP
+      g += ei * didp2;
+#endif
+#endif
       
       if (debug) {
 
         cv::Scalar color = tpi.t ? CV_RGB(0,255,0) : CV_RGB(0,0,255);
 
         drawPoint( debug_big, (pi+debug_delta)*debug_scl, color );
-        drawArrow( debug_big, (pi+debug_delta)*debug_scl, ei * gi, color, 1e-3 );
+        drawArrow( debug_big, (pi+debug_delta)*debug_scl, ei * didxy, color, 1e-3 );
 
       }
       

@@ -50,6 +50,8 @@ Run a tool to test tag detection. Options:\n\
  -s SEGSIGMA     Set the segmentation sigma value (default %.2f).\n\
  -a THETATHRESH  Set the theta threshold for clustering (default %.1f).\n\
  -m MAGTHRESH    Set the magnitude threshold for clustering (default %.1f).\n\
+ -V VALUE        Set adaptive threshold value for new quad algo (default %f).\n\
+ -N RADIUS       Set adaptive threshold radius for new quad algo (default %d).\n\
  -b              Refine bad quads using template tracker.\n\
  -r              Refine all quads using template tracker.\n\
  -n              Use the new quad detection algorithm.\n\
@@ -59,6 +61,8 @@ Run a tool to test tag detection. Options:\n\
           p.segSigma,
           p.thetaThresh,
           p.magThresh,
+          p.adaptiveThresholdValue,
+          p.adaptiveThresholdRadius,
           DEFAULT_TAG_FAMILY);
 
   fprintf(output, "Known tag families:");
@@ -71,7 +75,7 @@ Run a tool to test tag detection. Options:\n\
 
 TagTestOptions parse_options(int argc, char** argv) {
   TagTestOptions opts;
-  const char* options_str = "hdtRvxoDS:s:a:m:brnf:";
+  const char* options_str = "hdtRvxoDS:s:a:m:V:N:brnf:";
   int c;
   while ((c = getopt(argc, argv, options_str)) != -1) {
     switch (c) {
@@ -88,6 +92,8 @@ TagTestOptions parse_options(int argc, char** argv) {
       case 's': opts.params.segSigma = atof(optarg); break;
       case 'a': opts.params.thetaThresh = atof(optarg); break;
       case 'm': opts.params.magThresh = atof(optarg); break;
+      case 'V': opts.params.adaptiveThresholdValue = atof(optarg); break;
+      case 'N': opts.params.adaptiveThresholdRadius = atoi(optarg); break;
       case 'b': opts.params.refineBad = true; break;
       case 'r': opts.params.refineQuads = true; break;
       case 'n': opts.params.newQuadAlgorithm = true; break;
@@ -98,6 +104,7 @@ TagTestOptions parse_options(int argc, char** argv) {
         exit(1);
     }
   }
+  opts.params.adaptiveThresholdRadius += (opts.params.adaptiveThresholdRadius+1) % 2;
   if (opts.be_verbose) {
     opts.show_debug_info = opts.show_timing = opts.show_results = true;
   }

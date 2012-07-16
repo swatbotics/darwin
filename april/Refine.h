@@ -32,9 +32,12 @@ void drawPoint(cv::Mat& m, const at::Point& p,
 void drawArrow(cv::Mat& m, const at::Point& p, const at::Point& g, 
                const cv::Scalar& color, at::real scl=15.0/255.0);
 
-cv::Rect boundingRect(const at::Point p[4], const cv::Size sz);
+cv::Rect boundingRect(const at::Point p[4], const cv::Size& sz);
+void dilate(cv::Rect& r, int b, const cv::Size& sz);
 
 at::Point interpolate(const at::Point p[4], const at::Point& uv, at::Mat* pJ=0);
+at::Point interpolateH(const at::Mat& H, const at::Point& uv, at::Mat* pJxy=0);
+void computeH(const at::Point p[4], at::Mat& H, at::Mat* pJh=0);
 
 int refineQuad(const cv::Mat& gimage,
                const at::Mat& gx,

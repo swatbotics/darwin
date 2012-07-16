@@ -43,6 +43,8 @@ public:
 
 };
 
+at::real area(const at::Point* p, size_t n);
+
 struct Quad {
 
   at::Point p[4];
@@ -51,6 +53,8 @@ struct Quad {
   at::Mat H;
 
   at::real observedPerimeter;
+
+  at::real area() const;
 
   Quad();
 

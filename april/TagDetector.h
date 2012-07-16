@@ -21,6 +21,8 @@ public:
   at::real minimumSegmentSize;
   at::real minimumTagSize;
   at::real maxQuadAspectRatio;
+  at::real adaptiveThresholdValue;
+  int      adaptiveThresholdRadius;
   bool     refineQuads;
   bool     refineBad;
   bool     newQuadAlgorithm;
@@ -99,8 +101,14 @@ private:
   void getQuads_MZ(const Images& images,
                    QuadArray& quads) const;
 
-  void refineQuads_MZ(const Images& images,
-                      QuadArray& quads) const;
+  void refineQuadL(const Images& images, Quad& quad) const;
+
+  void refineQuadTT(const Images& images, Quad& quad) const;
+
+  void refineQuadLSQ(const Images& images, Quad& quad) const;
+
+  void refineQuads(const Images& images,
+                   QuadArray& quads) const;
   
   void debugShowQuads(const Images& images,
                       const QuadArray& quads,
