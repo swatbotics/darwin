@@ -30,7 +30,7 @@ if (CGAL_FOUND)
   message("")
   if (CGAL_LIBRARY)
     set(AT_LIBS "${AT_LIBS}" ${CGAL_LIBRARY})
-    add_definitions("-DHAVE_CGAL")
+    add_definitions("-DHAVE_CGAL" "-DCGAL_DISABLE_ROUNDING_MATH_CHECK")
   endif ()
 endif ()
 
