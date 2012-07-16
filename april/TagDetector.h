@@ -79,15 +79,17 @@ private:
     cv::Mat origBW;
     cv::Mat_<unsigned char> origBW8;
 
-    at::Mat gx;
-    at::Mat gy;
-
     at::Mat fimOrig; 
     at::Mat fim;
     
     at::Point opticalCenter;
 
   };
+  
+  static void sampleGradient(const Images& images, 
+                             int x, int y,
+                             at::real& gx, at::real& gy);
+
 
   TPointArray tpoints;
 

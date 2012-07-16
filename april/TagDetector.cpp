@@ -622,6 +622,7 @@ const bool refine_debug = false;
 const int refine_max_iter = 10;
 const at::real refine_max_grad = 1e-3;
 
+/*
 void TagDetector::refineQuadTT(const Images& images,
                                Quad& quad) const {
 
@@ -635,6 +636,7 @@ void TagDetector::refineQuadTT(const Images& images,
     quad.recomputeHomography();
 
 }
+*/
 
 struct DSegment {
 
@@ -1430,13 +1432,19 @@ void TagDetector::makeImages(const cv::Mat& orig,
 
   START_PROFILE(1, 0, "preprocess images");
 
+  START_PROFILE(1, 1, "convert to grayscale");
+
   if (orig.channels() == 1) {
     images.origBW = orig;
   } else {
     cv::cvtColor(orig, images.origBW, cv::COLOR_RGB2GRAY);
   }
 
+  END_PROFILE(1, 1);
+
   if (params.newQuadAlgorithm || params.refineQuads || params.refineBad) {
+
+    START_PROFILE(1, 2, "convert to 8-bit");
     
     if (images.origBW.depth() == CV_8U) {
       images.origBW8 = images.origBW;
@@ -1444,38 +1452,60 @@ void TagDetector::makeImages(const cv::Mat& orig,
       images.origBW.convertTo(images.origBW8, CV_8U, 255);
     }
 
+    END_PROFILE(1, 2);
+
+    START_PROFILE(1, 3, "compute image gradients");
+
     if (params.refineQuads || params.refineBad) {
       
+      /*
       cv::Sobel( images.origBW8, images.gx, at::IMAGE_TYPE, 1, 0 );
       cv::Sobel( images.origBW8, images.gy, at::IMAGE_TYPE, 0, 1 );
       
       images.gx *= 0.25;
       images.gy *= 0.25;
+      */
 
     }
 
+    END_PROFILE(1, 3);
+
   }
 
-  if (orig.depth() != at::IMAGE_TYPE) {
-    images.origBW.convertTo(images.fimOrig, at::IMAGE_TYPE, 1.0/255);
-  } else {
-    images.fimOrig = images.origBW;
-  }
+  if (!params.newQuadAlgorithm) {
 
+    START_PROFILE(1, 4, "convert to floating point");
 
-  if (params.sigma > 0) {
-    cv::GaussianBlur(images.fimOrig, images.fim, cv::Size(0,0), params.sigma);
-    if (debug) { 
-      emitDebugImage(debugWindowName, 
-                     1, 0, debugNumberFiles,
-                     "Blur", 
-                     images.fim, ScaleNone, true); 
+    if (orig.depth() != at::IMAGE_TYPE) {
+      images.origBW.convertTo(images.fimOrig, at::IMAGE_TYPE, 1.0/255);
+    } else {
+      images.fimOrig = images.origBW;
     }
-  } else {
-    images.fim = images.fimOrig;
+
+    END_PROFILE(1, 4);
+
+    START_PROFILE(1, 5, "blur floating point");
+
+    if (params.sigma > 0) {
+      cv::GaussianBlur(images.fimOrig, images.fim, cv::Size(0,0), params.sigma);
+      if (debug) { 
+        emitDebugImage(debugWindowName, 
+                       1, 0, debugNumberFiles,
+                       "Blur", 
+                       images.fim, ScaleNone, true); 
+      }
+    } else {
+      images.fim = images.fimOrig;
+    }
+
+    END_PROFILE(1, 5);
+
   }
 
   if (debug) {
+
+    START_PROFILE(1, 6, "make RGB debug image");
+
     cv::Mat rgb;
     if (images.orig.channels() == 3) {
       rgb = images.orig;
@@ -1491,6 +1521,9 @@ void TagDetector::makeImages(const cv::Mat& orig,
     } else {
       images.origRGB = rgb;
     }
+
+    END_PROFILE(1, 6);
+
   }
   
   END_PROFILE(1,0);
@@ -1532,6 +1565,31 @@ void TagDetector::process(const cv::Mat& orig,
   }
 
   END_PROFILE(0,0);
+
+}
+
+void TagDetector::sampleGradient(const Images& images, 
+                                 int x, int y,
+                                 at::real& gx, at::real& gy) {
+
+  /*
+  gx = images.gx(y,x);
+  gy = images.gy(y,x);
+  */
+
+  at::real i00 = bsample(images.origBW8, x-1, y-1);
+  at::real i10 = bsample(images.origBW8,   x, y-1);
+  at::real i20 = bsample(images.origBW8, x+1, y-1);
+
+  at::real i01 = bsample(images.origBW8, x-1,   y);
+  at::real i21 = bsample(images.origBW8, x+1,   y);
+
+  at::real i02 = bsample(images.origBW8, x-1, y+1);
+  at::real i12 = bsample(images.origBW8,   x, y+1);
+  at::real i22 = bsample(images.origBW8, x+1, y+1);
+
+  gx = at::real(0.25/255)*(-i00 - 2*i01 - i02 + i20 + 2*i21 + i22);
+  gy = at::real(0.25/255)*(-i00 - 2*i10 - i20 + i02 + 2*i12 + i22);
 
 }
 
@@ -1585,8 +1643,8 @@ void TagDetector::refineQuadLSQ(const Images& images,
   for (int y=r.y; y<y1; ++y) {
     for (int x=r.x; x<x1; ++x) {
       at::Point p = at::Point(x,y) + delta;
-      at::real gx = images.gx(y,x)/255;
-      at::real gy = images.gy(y,x)/255;
+      at::real gx, gy;
+      sampleGradient(images, x, y, gx, gy);
       at::real gm = gx*gx + gy*gy;
       for (int i=0; i<4; ++i) {
         if (dsegs[i].query(p, edge, -outer, inner)) {
@@ -1596,7 +1654,7 @@ void TagDetector::refineQuadLSQ(const Images& images,
     }
   }
 
-  if (debug && 0) {
+  if (debug && 1) {
 
     cv::Mat_<cv::Vec3b> rgbu = images.origRGB/2 + 127;
 
@@ -1819,7 +1877,7 @@ bool TagDetector::decodeQuad(const Images& images,
                              const Quad& quad, size_t i,
                              TagDetectionArray& detections) const {
 
-  int width = images.fim.cols, height = images.fim.rows;
+  int width = images.orig.cols, height = images.orig.rows;
 
   GrayModel blackModel, whiteModel;
 
@@ -1830,6 +1888,7 @@ bool TagDetector::decodeQuad(const Images& images,
   int dd = 2*tagFamily.blackBorder + tagFamily.d;
 
   std::vector< cv::Point > bpoints, wpoints;
+  at::real gscl = 1.0/255;
 
   for (int iy = -1; iy <= dd; iy++) {
     for (int ix = -1; ix <= dd; ix++) {
@@ -1838,8 +1897,11 @@ bool TagDetector::decodeQuad(const Images& images,
       at::real x = (ix + .5) / dd;
 
       at::Point pxy = interpolate(quad.p, at::Point(x,y));
-      at::real v = bicubicInterpolate( images.fim, pxy );
-        
+
+      at::real v = params.newQuadAlgorithm ?
+        bicubicInterpolate( images.origBW8, pxy )*gscl :
+        bicubicInterpolate( images.fim, pxy );
+
       if (pxy.x < 0 || pxy.x >= width || pxy.y < 0 || pxy.y >= height) {
         continue;
       }
@@ -1898,7 +1960,10 @@ bool TagDetector::decodeQuad(const Images& images,
       at::real x = (tagFamily.blackBorder + ix + .5) / dd;
 
       at::Point pxy = interpolate(quad.p, at::Point(x,y));
-      at::real v = bicubicInterpolate( images.fim, pxy );
+
+      at::real v = params.newQuadAlgorithm ?
+        bicubicInterpolate( images.origBW8, pxy ) * gscl :
+        bicubicInterpolate( images.fim, pxy );
 
       if (pxy.x < 0 || pxy.x >= width || pxy.y < 0 || pxy.y >= height) {
         if (debug) { std::cout << "quad " << i << " was bad!\n"; }
