@@ -1,7 +1,9 @@
 # swatbotics/april/CMakeLists.txt
 
-set(CMAKE_C_FLAGS_RELEASE "-O3 -frounding-math")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -frounding-math")
+set(CMAKE_C_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
+
 
 # Set this globally so it can be picked up by stuff in /darwin.
 # Using the project source dir for now, so that the april tag #includes
@@ -16,7 +18,12 @@ include_directories(${GFLAGS_INCLUDE_DIRS})
 
 set(AT_LIBS apriltagcpp ${OPENCV_LIBRARIES})
 
-find_package(CGAL QUIET)
+if(APPLE)
+set(CGAL_DIR "/opt/local/lib/cmake")
+endif(APPLE)
+
+
+find_package(CGAL)
 if (CGAL_FOUND)
   message("Using CGAL:")
   include(${CGAL_DIR}/UseCGAL.cmake)
@@ -26,6 +33,11 @@ if (CGAL_FOUND)
     add_definitions("-DHAVE_CGAL")
   endif ()
 endif ()
+
+message("CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
+if (APPLE)
+string (REPLACE "-frounding-math" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+endif(APPLE)
 
 add_library(apriltagcpp 
   CameraUtil.cpp

@@ -46,4 +46,8 @@ add_subdirectory(gflags)
 add_subdirectory(libconfig)
 add_subdirectory(april)
 add_subdirectory(darwin)
+
+if (NOT APPLE)
 add_subdirectory(ptpd)
+endif (NOT APPLE)
+
