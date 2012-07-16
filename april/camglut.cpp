@@ -4,6 +4,7 @@
 #include <GL/glut.h>
 #endif
 
+#include <cstdio>
 #include <stdlib.h>
 #include <opencv2/highgui/highgui.hpp>
 
@@ -18,7 +19,7 @@ uint32_t w, h;
 GLuint camera_texture = 0;
 GLuint font_texture = 0;
 
-const bool do_double = false;
+const bool do_double = true;
 
 clock_t start = 0;
 uint32_t frame_count = 0;

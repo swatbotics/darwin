@@ -3,4 +3,4 @@ add_library(control_robot
   DarwinDynamicDefinitions.cpp
   ForwardKinematics.cpp
   Joystick.cpp
-  Kinematics.cpp)
+  DarwinKinematics.cpp)
