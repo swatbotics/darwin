@@ -39,6 +39,7 @@ StatusServer::StatusServer() :
     io_thread_()
 {
   if (FLAGS_multicast) {
+    // Maybe should just always do this, in initializer list?
     multicast_endpoint_.address(
         asio::ip::address::from_string(FLAGS_multicast_address));
     multicast_endpoint_.port(FLAGS_multicast_port);
@@ -84,6 +85,15 @@ void StatusServer::SendData(const udp::endpoint& destination,
                   asio::placeholders::bytes_transferred));
 }
 
+void StatusServer::HandleSend(const asio::error_code& error,
+                              std::size_t bytes_transferred) {
+  if (error) {
+    std::cerr << "Error in sending data!\n";
+  } else if (DEBUG) {
+    std::cout << "Sent " << bytes_transferred << " bytes of data!\n";
+  }
+}
+
 void StatusServer::ReceiveRequest() {
   if (DEBUG) std::cout << "Receiving request!\n";
   socket_.async_receive_from(
@@ -100,15 +110,6 @@ void StatusServer::HandleRequest(const asio::error_code& error,
     RespondData();
   }
   ReceiveRequest();
-}
-
-void StatusServer::HandleSend(const asio::error_code& error,
-                              std::size_t bytes_transferred) {
-  if (error) {
-    std::cerr << "Error in sending data!\n";
-  } else if (DEBUG) {
-    std::cout << "Sent " << bytes_transferred << " bytes of data!\n";
-  }
 }
 
 void StatusServer::Run() {

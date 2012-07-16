@@ -27,11 +27,11 @@ class StatusServer {
   void PublishData();
   void RespondData();
   void SendData(const udp::endpoint& destination, udp::socket& socket);
+  void HandleSend(const asio::error_code& error,
+                  std::size_t bytes_transferred);
   void ReceiveRequest();
   void HandleRequest(const asio::error_code& error,
                      std::size_t /*bytes_transferred*/);
-  void HandleSend(const asio::error_code& error,
-                  std::size_t bytes_transferred);
 
   boost::mutex data_mutex_;
   std::string data_;
