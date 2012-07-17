@@ -94,7 +94,7 @@ StatusClient::StatusClient() :
     data_mutex_(),
     data_(),
     io_service_(),
-    packet_seq_num_(0),
+    packet_seq_num_(-1),
     socket_(io_service_),
     multicast_socket_(io_service_),
     remote_endpoint_(),
@@ -191,7 +191,7 @@ void StatusClient::ParseDataFromBuffer(const std::vector<char>& buffer,
       } else if (packet_num == packet_seq_num_) {
         std::cerr << "PACKET ERROR: Duplicate packet number "
                   << packet_num << "!\n";
-      } else if (packet_num > packet_seq_num_ + 1) {
+      } else if (packet_seq_num_ > -1 && packet_num > packet_seq_num_ + 1) {
         std::cerr << "PACKET ERROR: Dropped "
                   << packet_num - packet_seq_num_ << " packets between "
                   << packet_seq_num_ << " and " << packet_num << "!\n";
