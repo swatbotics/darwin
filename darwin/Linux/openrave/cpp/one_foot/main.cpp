@@ -162,8 +162,9 @@ void getCOM(std::vector<IKReal> sol_l, std::vector<IKReal> sol_r,
     myKin.setAngle(i+8, sol_r[i]);
   }  
   myKin.update();
-  float bodyCOM[3] = {0,0,0};
-  myKin.getCOM(bodyCOM);
+  vec3f bodyCOMvec = myKin.getCOM();
+  float bodyCOM[3] = {bodyCOMvec[0], bodyCOMvec[1], bodyCOMvec[2]} ;
+
   // bodytrans is the translation of the body relative to the body 
   // at 0 position, so we must adjust to have it centered at the foot
   applyTransform(bodytrans, bodyrot, bodyCOM, COM);
