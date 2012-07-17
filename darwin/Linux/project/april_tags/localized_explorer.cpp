@@ -33,6 +33,18 @@ DEFINE_double(tilt_pgain, 0.05, "Tilt controller proportional gain.");
 DEFINE_double(tilt_igain, 0.0, "Tilt controller integral gain.");
 DEFINE_double(tilt_dgain, 0.0, "Tilt controller derivative gain.");
 
+DEFINE_bool(latency_test, true,
+            "Run a test to determine overall system latency.");
+DEFINE_double(latency_test_length, 10.0,
+              "Length of latency test in seconds.");
+DEFINE_double(latency_test_amplitude, 30.0,
+              "Amplitude of latency test sinusoid in degrees.");
+DEFINE_double(latency_test_offset, 30.0,
+              "Offset of latency test sinusoid in degrees (positive is "
+              "turning the head to the left).");
+DEFINE_double(latency_test_period, 2.0,
+              "Period of latency test sinusoid in seconds.");
+
 namespace Robot {
 
 LocalizedExplorer::LocalizedObject::LocalizedObject() {
@@ -74,7 +86,12 @@ void LocalizedExplorer::Initialize() {
   InitializeMotionFramework();
   prompt("Initialize robot position?");
   InitializeMotionModules();
+
   client_.Run();
+  if (FLAGS_latency_test) {
+    prompt("Start latency detection?");
+    MeasureSystemLatency();
+  }
   prompt("Start tracking mode?");
 }
 
@@ -101,6 +118,44 @@ void LocalizedExplorer::InitializeMotionModules() {
   head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 4); //8);
   MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
   manager->SetEnable(true);
+}
+
+void LocalizedExplorer::MeasureSystemLatency() {
+  double kLatencyTestTilt = 40;
+  Head::GetInstance()->MoveByAngle(FLAGS_latency_test_offset,
+                                   kLatencyTestTilt);
+  prompt("Run latency detection?");
+
+  double start_time = get_time_as_double();
+  double elapsed_time = 0.0;
+  while (elapsed_time < FLAGS_latency_test_length) {
+    elapsed_time = get_time_as_double() - start_time;
+    double A = FLAGS_latency_test_amplitude;
+    double B = FLAGS_latency_test_offset;
+    double T = FLAGS_latency_test_period;
+    double t = elapsed_time;
+    double angle = A * sin(t * (2 * M_PI) / T) + B;
+    Head::GetInstance()->MoveByAngle(angle, kLatencyTestTilt);
+
+    LocalizedObjectMap obj_map = RetrieveObjectData();
+    if (obj_map.count("head") == 0 || obj_map.count("body") == 0) {
+      std::cerr << "Cannot see head and body for latency measurements!\n";
+      continue;
+    }
+    LocalizedObject head = obj_map["head"];
+    LocalizedObject body = obj_map["body"];
+    cv::Mat head_r_mat;
+    cv::Mat body_r_mat;
+    cv::Rodrigues(head.r, head_r_mat);
+    cv::Rodrigues(body.r, body_r_mat);
+    cv::Mat head_x = head_r_mat.col(0);
+    cv::Mat body_x = body_r_mat.col(0);
+    //    std::cout << "head_x = " << head_x << "\n";
+    //    std::cout << "body_x = " << body_x << "\n";
+    double seen_angle = acos(head_x.dot(body_x)) * 180 / M_PI;
+    fprintf(stdout, "Time: %7.3f - Angle: %5.1f - Seen angle: %5.1f\n",
+            elapsed_time, angle, seen_angle);
+  }
 }
 
 void LocalizedExplorer::Process() {
