@@ -110,7 +110,7 @@ void ForwardKinematics::getJacobian(int attachedFrame,
   vec3f column, axisVec, positionVec, GlobalPosition;
   GlobalPosition = _transforms[attachedFrame] * position;
   while (1){
-    axisVec = _transforms[i].rotFwd() * _myDar.Links[i].AXIS;
+    axisVec = getAxis(i);
     positionVec = GlobalPosition - _transforms[i].translation();
     column = vec3f::cross(axisVec , positionVec);
     // update result
@@ -141,7 +141,14 @@ vec3f ForwardKinematics::getCOM(){
   return accum / total_mass;
 }
 
-
+vec3f ForwardKinematics::getAxis(int index){
+  if (index<=0 || index >=_numJoints+1){
+    printf("attempting to get axis on link %d.\n", index);
+    std::exit(-1);
+  } else {
+    return _transforms[index].rotFwd() * _myDar.Links[index].AXIS;
+  }
+}
 
 Transform3f ForwardKinematics::getTransform(int index){
   if (index<0 || index >=_numJoints+1){

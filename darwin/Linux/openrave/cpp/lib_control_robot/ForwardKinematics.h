@@ -18,6 +18,7 @@ class ForwardKinematics {
   void setAngle(int index, float value);
   void setAngleOffset(int index, float value);
   float getAngle(int index);
+  vec3f getAxis(int index);
   bool isUpdated();
   void printTrans(int index);
   void printTrans(const Transform3f trans);

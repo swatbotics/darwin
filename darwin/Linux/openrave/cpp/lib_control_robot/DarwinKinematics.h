@@ -17,7 +17,8 @@ class Kinematics{
   void setAngle(int index, float value);
   Transform3f getTransform();
   bool setTransform(Transform3f trans);
-  bool setTransformOffset(Transform3f dt);
+  bool setT_PostOffset(Transform3f dt);
+  bool setT_PreOffset(Transform3f dt);
   ForwardKinematics getFKinObj();
   FootFrame getFrame();
 

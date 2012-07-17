@@ -1,4 +1,6 @@
 #include "DarwinKinematics.h"
+#include <opencv2/core/core.hpp>
+
 #define IKFAST_NAMESPACE leftleg
 #include "ik_leftleg.cpp"
 #undef IKFAST_NAMESPACE
@@ -53,9 +55,63 @@ void Kinematics::getJacobian(int attachedFrame,
       result[i] = R * Jac[i+6];
     }
   }
-  // If the attached frame is leftleg
+  // If the attached frame is leftfoot, frame number 8
   else {
+    int foot = 8;
+    //    cv::Mat Rot = cv::Mat_<float>(3,3,R.data);
+    cv::Mat Rot; 
+    cv::Mat_<float>(3,3,R.data).copyTo(Rot);
+    /*
+    for (int i=0; i<3; i++){
+      for (int j=0; j<3; j++){
+	Rot.at<float>(i,j) = R(i,j);
+      }
+    }
+    return Rot.clone(); // ok
+    return Rot * 1.0; // forces a copy because it's an expression
+    return Rot; // ack - references local data
+    cv::Mat_<float> Rot(3,3);
+    return mat3_t(Rot.data); // copies data
+    */
+    cv::Mat dfk = cv::Mat_<float>(3,6); 
+    for (int j=0; j<6; j++){
+      for (int i=0; i<3; i++){
+	dfk.at<float>(i,j) = Jac[(foot-6)+j][i];
+      }
+    }
+
+    vec3f Jb_full[20];
+    fKin.getJacobian(foot, vec3f(0,0,0), Jb_full);
+    cv::Mat J = cv::Mat_<float>(6,6);
+    for(int j=0; j<6; j++){
+      for(int i=0; i<3; i++){
+	J.at<float>(i,j) = fKin.getAxis(foot-5+j)[i];
+	J.at<float>(i+3,j) = Jb_full[foot-6+j][i];
+      }
+    }
     
+    cv::Mat J_inv = J.inv();
+    cv::Mat dik_t = cv::Mat(J_inv, cv::Rect(3,0,3,6));
+    cv::Mat dik_r = cv::Mat(J_inv, cv::Rect(0,0,3,6));
+    cv::Mat R_inv = Rot.inv();
+
+    cv::Mat sol_t = cv::Mat_<float>::eye(3,3)-Rot*dfk*dik_t*R_inv;
+
+    for (int i=0; i<3; i++){
+      for (int j=0; j<3; j++) {
+	result[3+j][i] = sol_t.at<float>(i,j);
+      }
+    }
+
+    cv::Mat sol_r = -Rot*dfk*dik_r;
+
+    for (int i=0; i<3; i++){
+      for (int j=0; j<3; j++) {
+	result[j][i] = sol_r.at<float>(i,j);
+      }
+    }
+    
+
   }
 }
 
@@ -231,6 +287,11 @@ bool Kinematics::setTransform(Transform3f trans){
   return true;
 }
 
-bool Kinematics::setTransformOffset(Transform3f dt){
+bool Kinematics::setT_PostOffset(Transform3f dt){
   return setTransform(b_transform * dt);
 }
+
+bool Kinematics::setT_PreOffset(Transform3f dt){
+  return setTransform(dt * b_transform);
+}
+
