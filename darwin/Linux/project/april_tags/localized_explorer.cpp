@@ -14,6 +14,7 @@
 #define INI_FILE_PATH "config.ini"
 #define U2D_DEV_NAME "/dev/ttyUSB0"
 
+DEFINE_bool(quiet, false, "Set to reduce amount of output shown.");
 DEFINE_double(fps_target, 15, "Target frames per second to run at.");
 
 DEFINE_string(goal_object, "",
@@ -120,7 +121,9 @@ LocalizedExplorer::LocalizedObjectMap LocalizedExplorer::RetrieveObjectData() {
   LocalizedObjectMap obj_map;
   // Retrieve data from localization client, extract head rotation info.
   std::string data = client_.GetData();
-  std::cout << "DATA:\n" << data << "\n";
+  if (!FLAGS_quiet) {
+    std::cout << "DATA:\n" << data << "\n";
+  }
   std::vector<std::string> lines = split(data, '\n');
   for (std::vector<std::string>::const_iterator it = lines.begin();
        it != lines.end(); ++it) {
