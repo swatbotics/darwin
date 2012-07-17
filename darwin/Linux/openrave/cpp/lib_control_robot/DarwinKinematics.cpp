@@ -20,6 +20,31 @@ Transform3f Kinematics::getTransform(int frame){
   return b_transform * fKin.getTransform(frame);
 }
 
+void Kinematics::getCOMJacobian(vec3f result[14]){
+  float total_mass = 0;
+  vec3f accum[14];
+  for (int j=0; j<14; j++){
+    accum[j] = vec3f(0,0,0);
+  }
+
+  vec3f linkJacobian[14];
+  for (int i=0; i<21; i++){
+    getCOMJacobian(i, linkJacobian);
+    for (int j=0; j<14; j++){
+      accum[j] = linkJacobian[j] * fKin.getMass(i) + accum[j];
+    }
+    total_mass += fKin.getMass(i);
+  }
+  for (int j=0; j<20; j++){
+    result[j] = accum[j] / total_mass;
+  }
+  return;
+}
+
+void Kinematics::getCOMJacobian(int attachedFrame,
+				vec3f result[14]){
+  getJacobian(attachedFrame, fKin.getCOM_raw(attachedFrame), result);
+}
 
 void Kinematics::getJacobian(int attachedFrame,
 			     vec3f position,
@@ -239,6 +264,23 @@ bool Kinematics::IKright(Transform3f transform, float solution[]){
   return false;
 }
 
+bool Kinematics::IKleft(float solution[]){
+  if (Frame==LeftFoot){
+    return IKleft(b_transform.inverse(), solution);
+  } else {
+    return IKleft(t_foot * b_transform.inverse(), solution);
+  }
+}
+
+bool Kinematics::IKright(float solution[]){
+  if (Frame==RightFoot){
+    return IKright(b_transform.inverse(), solution);
+  } else {
+    return IKright(t_foot * b_transform.inverse(), solution);
+  }
+}
+
+
 ForwardKinematics Kinematics::getFKinObj(){
   return fKin;
 }
@@ -263,6 +305,10 @@ FootFrame Kinematics::getFrame(){
 
 Transform3f Kinematics::getTransform(){
   return b_transform;
+}
+
+vec3f Kinematics::getCOM(){
+  return b_transform * fKin.getCOM();
 }
 
 bool Kinematics::setTransform(Transform3f trans){

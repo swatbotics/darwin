@@ -14,6 +14,8 @@ class ForwardKinematics {
   void update();
   vec3f getCOM(int index);
   vec3f getCOM();
+  vec3f getCOM_raw(int index);
+  float getMass(int index);
   Transform3f getTransform(int index);
   void setAngle(int index, float value);
   void setAngleOffset(int index, float value);

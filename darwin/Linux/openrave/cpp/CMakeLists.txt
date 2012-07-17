@@ -12,6 +12,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DIKFAST_NO_MAIN")
 include_directories(./lib_control_robot)
 add_subdirectory(lib_control_robot)
 
+add_subdirectory(one_foot)
+add_subdirectory(one_foot_diff)
 add_subdirectory(control_ee)
 add_subdirectory(forwardKin)
 add_subdirectory(Jacobians)

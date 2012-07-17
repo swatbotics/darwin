@@ -122,6 +122,14 @@ void ForwardKinematics::getJacobian(int attachedFrame,
   }
 }
 
+vec3f ForwardKinematics::getCOM_raw(int index){
+  if (index<0 || index >20){
+    printf("asking for COM of link %d\n", index);
+    exit(-1);
+  }
+  return _myDar.Links[index].COM; 
+}
+
 vec3f ForwardKinematics::getCOM(int index){ 
   if (index<0 || index >20){
     printf("asking for COM of link %d\n", index);
@@ -140,6 +148,15 @@ vec3f ForwardKinematics::getCOM(){
   }
   return accum / total_mass;
 }
+
+float ForwardKinematics::getMass(int index){
+  if (index<0 || index >20){
+    printf("asking for mass of link %d\n", index);
+    exit(-1);
+  }
+  return _myDar.Links[index].MASS;
+}
+
 
 vec3f ForwardKinematics::getAxis(int index){
   if (index<=0 || index >=_numJoints+1){
