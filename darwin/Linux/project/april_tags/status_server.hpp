@@ -26,7 +26,8 @@ class StatusServer {
  private:
   void PublishData();
   void RespondData();
-  void SendData(const udp::endpoint& destination, udp::socket& socket);
+  void SendData(long seq_num, const udp::endpoint& destination,
+                udp::socket& socket);
   void HandleSend(const asio::error_code& error,
                   std::size_t bytes_transferred);
   void ReceiveRequest();
@@ -36,6 +37,8 @@ class StatusServer {
   boost::mutex data_mutex_;
   std::string data_;
   asio::io_service io_service_;
+  long seq_num_;
+  long multicast_seq_num_;
   udp::socket socket_;
   udp::socket multicast_socket_;
   udp::endpoint remote_endpoint_;

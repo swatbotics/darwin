@@ -3,6 +3,7 @@
 #include <algorithm>  // For min() and max().
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
 #include <libgen.h>  // For dirname().
 #include <sstream>  // For stringstream.
 #include <string>
@@ -76,4 +77,12 @@ std::vector<std::string> &split(const std::string &s, char delim,
 std::vector<std::string> split(const std::string &s, char delim) {
   std::vector<std::string> elems;
   return split(s, delim, elems);
+}
+
+bool prompt(const std::string& prompt_text, bool yesno) {
+  std::cout << prompt_text << (yesno ? " [Yn] " : " (hit enter) ");
+  std::cout.flush();
+  char input = std::cin.get();
+  if (yesno && (input == 'n' || input == 'N')) return false;
+  return true;
 }

@@ -30,4 +30,6 @@ std::vector<std::string> &split(const std::string &s, char delim,
 
 std::vector<std::string> split(const std::string &s, char delim);
 
+bool prompt(const std::string& prompt_text, bool yesno=false);
+
 #endif  // UTIL_HPP

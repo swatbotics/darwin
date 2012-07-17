@@ -27,6 +27,12 @@ DEFINE_int32(server_port, 9000,
 DEFINE_bool(include_timestamp, true,
             "Indicates that status datagrams contain a timestamp line of "
             "the form 'seconds nanoseconds' preceeding the payload.");
+DEFINE_bool(numbered_packets, true,
+            "Emit sequentially numbered packets (separate numbering for "
+            "multicast and unicast packets).");
+DEFINE_bool(show_packet_errors, true,
+            "Report out-of-order, duplicate, or dropped packets.  Only "
+            "effective if used with --numbered_packets.");
 DEFINE_bool(measure_latency, false,
             "Show statistics about client-server latency.");
 
@@ -88,6 +94,7 @@ StatusClient::StatusClient() :
     data_mutex_(),
     data_(),
     io_service_(),
+    packet_seq_num_(-1),
     socket_(io_service_),
     multicast_socket_(io_service_),
     remote_endpoint_(),
@@ -172,13 +179,34 @@ void StatusClient::ParseDataFromBuffer(const std::vector<char>& buffer,
                                        size_t num_bytes) {
   std::string payload(buffer.begin(), buffer.begin() + num_bytes);
   size_t start_pos = 0;
-  if (FLAGS_include_timestamp) {
-    size_t nl_pos = payload.find('\n');
+  if (FLAGS_numbered_packets) {
+    size_t nl_pos = payload.find('\n', start_pos);
+    if (FLAGS_show_packet_errors) {
+      long packet_num;
+      std::istringstream iss(payload.substr(start_pos, nl_pos));
+      iss >> packet_num;
+      if (packet_num < packet_seq_num_) {
+        std::cerr << "PACKET ERROR: Packet " << packet_num << " "
+                  << "arrived after packet " << packet_seq_num_ << "!\n";
+      } else if (packet_num == packet_seq_num_) {
+        std::cerr << "PACKET ERROR: Duplicate packet number "
+                  << packet_num << "!\n";
+      } else if (packet_seq_num_ > -1 && packet_num > packet_seq_num_ + 1) {
+        std::cerr << "PACKET ERROR: Dropped "
+                  << packet_num - packet_seq_num_ << " packets between "
+                  << packet_seq_num_ << " and " << packet_num << "!\n";
+      }
+      packet_seq_num_ = packet_num;
+    }
     start_pos = nl_pos + 1;
+  }
+  if (FLAGS_include_timestamp) {
+    size_t nl_pos = payload.find('\n', start_pos);
     if (FLAGS_measure_latency) {
-      std::string timestamp = payload.substr(0, nl_pos);
+      std::string timestamp = payload.substr(start_pos, nl_pos);
       MeasureDelay(timestamp);
     }
+    start_pos = nl_pos + 1;
   }
   {
     boost::lock_guard<boost::mutex> lock(data_mutex_);
