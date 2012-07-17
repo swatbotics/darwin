@@ -72,10 +72,10 @@ void LocalizedExplorer::Initialize() {
   // To make relative filenames work.
   change_dir_from_root("darwin/Linux/project/april_tags");
   InitializeMotionFramework();
-  printf("Initialize robot position? (hit enter) "); getchar();
+  prompt("Initialize robot position?");
   InitializeMotionModules();
-  printf("Start tracking mode? (hit enter) "); getchar();
   client_.Run();
+  prompt("Start tracking mode?");
 }
 
 void LocalizedExplorer::InitializeMotionFramework() {
