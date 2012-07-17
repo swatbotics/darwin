@@ -24,6 +24,8 @@ DEFINE_int32(frame_width, 640, "Desired video frame width.");
 DEFINE_int32(frame_height, 480, "Desired video frame height.");
 DEFINE_bool(rigid_transform, true,
             "Require rigid transform from camera to world frame.");
+DEFINE_bool(quiet, false,
+            "Set to reduce the amount of output produced.");
 DEFINE_bool(show_localization_error, false,
             "Show amount of error in localization of reference tags.");
 DEFINE_bool(show_display, false, "Show a visual display of detections.");
@@ -348,9 +350,11 @@ void Localizer::LocalizeObjects() {
     tag.t = TransformToGlobal(tag.raw_t);
     if (DEBUG) std::cout << "raw_r = \n" << raw_r_mat << "\n";
     if (DEBUG) std::cout << "raw_t = " << tag.raw_t << "\n";
-    printf("Tag (id #%d) at (%.2f, %.2f, %.2f), x -> (%.2f, %.2f, %.2f)\n",
-           tag.id, tag.t[0][0], tag.t[1][0], tag.t[2][0],
-           r_mat[0][0], r_mat[1][0], r_mat[2][0]);
+    if (!FLAGS_quiet) {
+      printf("Tag (id #%d) at (%.2f, %.2f, %.2f), x -> (%.2f, %.2f, %.2f)\n",
+             tag.id, tag.t[0][0], tag.t[1][0], tag.t[2][0],
+             r_mat[0][0], r_mat[1][0], r_mat[2][0]);
+    }
   }
   for (TaggedObjectMap::iterator it = tagged_objects_.begin();
        it != tagged_objects_.end(); ++it) {
@@ -358,9 +362,12 @@ void Localizer::LocalizeObjects() {
     if (LocalizeObjectFromTags(obj)) {
       cv::Mat_<double> r_mat;
       cv::Rodrigues(obj.r, r_mat);
-      printf("Object (%s) at (%.2f, %.2f, %.2f), x -> (%.2f, %.2f, %.2f)\n",
-             obj.name.c_str(), obj.t[0][0], obj.t[1][0], obj.t[2][0],
-             r_mat[0][0], r_mat[1][0], r_mat[2][0]);
+      if (!FLAGS_quiet) {
+        printf("Object (%s) at (%.2f, %.2f, %.2f), "
+               "x -> (%.2f, %.2f, %.2f)\n",
+               obj.name.c_str(), obj.t[0][0], obj.t[1][0], obj.t[2][0],
+               r_mat[0][0], r_mat[1][0], r_mat[2][0]);
+      }
     }
   }
 }
