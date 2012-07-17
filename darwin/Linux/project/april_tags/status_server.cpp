@@ -25,11 +25,16 @@ DEFINE_int32(server_port, 9000,
 DEFINE_bool(include_timestamp, true,
             "Include a 'seconds nanoseconds' timestamp line at the top of "
             "each outbound datagram.");
+DEFINE_bool(numbered_packets, true,
+            "Emit sequentially numbered packets (separate numbering for "
+            "multicast and unicast packets).");
 
 StatusServer::StatusServer() :
     data_mutex_(),
     data_(),
     io_service_(),
+    seq_num_(0),
+    multicast_seq_num_(0),
     socket_(io_service_),
     multicast_socket_(io_service_),
     remote_endpoint_(),
@@ -55,16 +60,19 @@ void StatusServer::UpdateData(const std::string& data) {
 }
 
 void StatusServer::PublishData() {
-  SendData(multicast_endpoint_, multicast_socket_);
+  SendData(multicast_seq_num_++, multicast_endpoint_, multicast_socket_);
 }
 
 void StatusServer::RespondData() {
-  SendData(remote_endpoint_, socket_);
+  SendData(seq_num_++, remote_endpoint_, socket_);
 }
 
-void StatusServer::SendData(const udp::endpoint& destination,
+void StatusServer::SendData(long seq_num, const udp::endpoint& destination,
                             udp::socket& socket) {
   std::ostringstream sstr;
+  if (FLAGS_numbered_packets) {
+    sstr << seq_num << "\n";
+  }
   if (FLAGS_include_timestamp) {
     struct timespec curtime;
     clock_gettime(CLOCK_REALTIME, &curtime);
@@ -75,7 +83,7 @@ void StatusServer::SendData(const udp::endpoint& destination,
     boost::lock_guard<boost::mutex> lock(data_mutex_);
     *response_data += data_;
   }
-  if (DEBUG) std::cout << "Starting send with data: " << *response_data
+  if (DEBUG) std::cout << "Starting send with data: \n" << *response_data
                        << " to address: " << destination.address()
                        << ":" << destination.port() << "\n";
   socket.async_send_to(
