@@ -43,6 +43,7 @@ class StatusClient {
   boost::mutex data_mutex_;
   std::string data_;
   asio::io_service io_service_;
+  long packet_seq_num_;
   udp::socket socket_;
   udp::socket multicast_socket_;
   udp::endpoint remote_endpoint_;
