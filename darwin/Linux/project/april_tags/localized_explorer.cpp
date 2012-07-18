@@ -15,7 +15,7 @@
 #define U2D_DEV_NAME "/dev/ttyUSB0"
 
 DEFINE_bool(quiet, false, "Set to reduce amount of output shown.");
-DEFINE_double(fps_target, 15, "Target frames per second to run at.");
+DEFINE_double(fps_target, 50, "Target frames per second to run at.");
 
 DEFINE_string(goal_object, "",
               "Object whose frame goal coordinates are specified in; the "
