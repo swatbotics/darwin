@@ -135,26 +135,26 @@ void LocalizedExplorer::MeasureSystemLatency() {
     double T = FLAGS_latency_test_period;
     double t = elapsed_time;
     double angle = A * sin(t * (2 * M_PI) / T) + B;
-    Head::GetInstance()->MoveByAngle(angle, kLatencyTestTilt);
+    Head* head = Head::GetInstance();
+    head->MoveByAngle(angle, kLatencyTestTilt);
+    double servo_angle = head->m_Joint.GetAngle(JointData::ID_HEAD_PAN);
 
     LocalizedObjectMap obj_map = RetrieveObjectData();
     if (obj_map.count("head") == 0 || obj_map.count("body") == 0) {
       std::cerr << "Cannot see head and body for latency measurements!\n";
       continue;
     }
-    LocalizedObject head = obj_map["head"];
-    LocalizedObject body = obj_map["body"];
+    LocalizedObject head_obj = obj_map["head"];
+    LocalizedObject body_obj = obj_map["body"];
     cv::Mat head_r_mat;
     cv::Mat body_r_mat;
-    cv::Rodrigues(head.r, head_r_mat);
-    cv::Rodrigues(body.r, body_r_mat);
+    cv::Rodrigues(head_obj.r, head_r_mat);
+    cv::Rodrigues(body_obj.r, body_r_mat);
     cv::Mat head_x = head_r_mat.col(0);
     cv::Mat body_x = body_r_mat.col(0);
-    //    std::cout << "head_x = " << head_x << "\n";
-    //    std::cout << "body_x = " << body_x << "\n";
     double seen_angle = acos(head_x.dot(body_x)) * 180 / M_PI;
-    fprintf(stdout, "Time: %7.3f - Angle: %5.1f - Seen angle: %5.1f\n",
-            elapsed_time, angle, seen_angle);
+    printf("Time: %7.3f  Output: %5.1f  Servo: %5.1f  Seen: %5.1f\n",
+           elapsed_time, angle, servo_angle, seen_angle);
   }
 }
 
