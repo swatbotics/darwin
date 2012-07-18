@@ -33,6 +33,9 @@ DEFINE_double(tilt_pgain, 0.05, "Tilt controller proportional gain.");
 DEFINE_double(tilt_igain, 0.0, "Tilt controller integral gain.");
 DEFINE_double(tilt_dgain, 0.0, "Tilt controller derivative gain.");
 
+DEFINE_double(servo_pan_pgain, 8, "Pan servo proportional gain.");
+DEFINE_double(servo_tilt_pgain, 8, "Tilt servo proportional gain.");
+
 DEFINE_bool(latency_test, true,
             "Run a test to determine overall system latency.");
 DEFINE_double(latency_test_length, 10.0,
@@ -114,8 +117,8 @@ void LocalizedExplorer::InitializeMotionModules() {
   Head* head = Head::GetInstance();
   manager->AddModule(head);
   head->m_Joint.SetEnableHeadOnly(true, true);
-  head->m_Joint.SetPGain(JointData::ID_HEAD_PAN, 4); //8);
-  head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 4); //8);
+  head->m_Joint.SetPGain(JointData::ID_HEAD_PAN, FLAGS_servo_pan_pgain);
+  head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, FLAGS_servo_tilt_pgain);
   MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
   manager->SetEnable(true);
 }
