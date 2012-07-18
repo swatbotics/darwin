@@ -86,6 +86,8 @@ void Kinematics::getJacobian(int attachedFrame,
     //    cv::Mat Rot = cv::Mat_<float>(3,3,R.data);
     cv::Mat Rot; 
     cv::Mat_<float>(3,3,R.data).copyTo(Rot);
+    cv::Mat R_inv = Rot.inv();
+
     /*
     for (int i=0; i<3; i++){
       for (int j=0; j<3; j++){
@@ -98,6 +100,8 @@ void Kinematics::getJacobian(int attachedFrame,
     cv::Mat_<float> Rot(3,3);
     return mat3_t(Rot.data); // copies data
     */
+
+    // Forward Kinematic Jacobian
     cv::Mat dfk = cv::Mat_<float>(3,6); 
     for (int j=0; j<6; j++){
       for (int i=0; i<3; i++){
@@ -105,6 +109,7 @@ void Kinematics::getJacobian(int attachedFrame,
       }
     }
 
+    // Inverse Kinematic Jacobian
     vec3f Jb_full[20];
     fKin.getJacobian(foot, vec3f(0,0,0), Jb_full);
     cv::Mat J = cv::Mat_<float>(6,6);
@@ -114,28 +119,24 @@ void Kinematics::getJacobian(int attachedFrame,
 	J.at<float>(i+3,j) = Jb_full[foot-6+j][i];
       }
     }
-    
     cv::Mat J_inv = J.inv();
     cv::Mat dik_t = cv::Mat(J_inv, cv::Rect(3,0,3,6));
     cv::Mat dik_r = cv::Mat(J_inv, cv::Rect(0,0,3,6));
-    cv::Mat R_inv = Rot.inv();
+    cv::Mat product_t = (dfk * dik_t);
+    cv::Mat product_r = (dfk * dik_r);
+    mat3f fkik_t = mat3f( (float*) (product_t.data) );
+    mat3f fkik_r = mat3f( (float*) (product_r.data) );
 
-    cv::Mat sol_t = cv::Mat_<float>::eye(3,3)-Rot*dfk*dik_t*R_inv;
-
+    mat3f sol_t = mat3f::identity() - R * fkik_t * R.inverse();
     for (int i=0; i<3; i++){
-      for (int j=0; j<3; j++) {
-	result[3+j][i] = sol_t.at<float>(i,j);
-      }
-    }
-
-    cv::Mat sol_r = -Rot*dfk*dik_r;
-
-    for (int i=0; i<3; i++){
-      for (int j=0; j<3; j++) {
-	result[j][i] = sol_r.at<float>(i,j);
-      }
+      result[3+i] = sol_t.col(i);
     }
     
+    mat3f sol_r = mat3f::cross(-R*(trans_from_body.transformFwd(position)))*(fkik_r + fkik_t * R.transpose() * mat3f::cross(b_transform.translation()));
+
+    for (int i=0; i<3; i++){
+      result[i] = sol_r.col(i);
+    }
 
   }
 }
