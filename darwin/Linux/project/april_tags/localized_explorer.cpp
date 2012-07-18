@@ -128,8 +128,8 @@ void LocalizedExplorer::MeasureSystemLatency() {
 
   double start_time = get_time_as_double();
   double elapsed_time = 0.0;
-  while (elapsed_time < FLAGS_latency_test_length) {
-    elapsed_time = get_time_as_double() - start_time;
+  while ((elapsed_time = (get_time_as_double() - start_time))
+         < FLAGS_latency_test_length) {
     double A = FLAGS_latency_test_amplitude;
     double B = FLAGS_latency_test_offset;
     double T = FLAGS_latency_test_period;
