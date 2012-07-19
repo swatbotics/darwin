@@ -38,6 +38,8 @@ DEFINE_double(servo_tilt_pgain, 8, "Tilt servo proportional gain.");
 
 DEFINE_bool(latency_test, true,
             "Run a test to determine overall system latency.");
+DEFINE_bool(latency_test_square_wave, false,
+            "Use a square wave instead of a sinusoid for latency testing.");
 DEFINE_double(latency_test_length, 10.0,
               "Length of latency test in seconds.");
 DEFINE_double(latency_test_amplitude, 30.0,
@@ -137,7 +139,12 @@ void LocalizedExplorer::MeasureSystemLatency() {
     double B = FLAGS_latency_test_offset;
     double T = FLAGS_latency_test_period;
     double t = elapsed_time;
-    double angle = A * sin(t * (2 * M_PI) / T) + B;
+    double angle = 0;
+    if (FLAGS_latency_test_square_wave) {
+      angle = A * (sin(t * (2 * M_PI) / T) >= 0 ? 1 : -1) + B;
+    } else {
+      angle = A * sin(t * (2 * M_PI) / T) + B;
+    }
     Head* head = Head::GetInstance();
     head->MoveByAngle(angle, kLatencyTestTilt);
     double servo_angle = head->m_Joint.GetAngle(JointData::ID_HEAD_PAN);
