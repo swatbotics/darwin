@@ -247,7 +247,7 @@ bool COMinbounds(std::vector<IKReal> sol_l, std::vector<IKReal> sol_r,
   IKReal globalCOM[3] = {0,0,0};
   bodyCOM_vec = myKin.getCOM();
   float bodyCOM[3] = {bodyCOM_vec[0],bodyCOM_vec[1],bodyCOM_vec[2]};
-  IKReal bodytrans_from_foot[3]={bodytrans[0], bodytrans[1]+.3416, bodytrans[2]};
+  IKReal bodytrans_from_foot[3]={bodytrans[0], bodytrans[1]+.3081, bodytrans[2]};
   // bodytrans is the translation of the body relative to the body 
   // at 0 position, so we must adjust to have it centered at the foot
   applyTransform(bodytrans_from_foot, bodyrot, bodyCOM, globalCOM);
@@ -363,8 +363,8 @@ void dance(IKReal* trans, IKReal* Euler, Joystick* joy){
    IKReal oldEuler[3] = {0,0,0};
    IKReal oldtrans[3] = {0,0,0};
    IKReal eerot_l[9], eerot_r[9], bodyrot[9], eetrans_l[3], eetrans_r[3];
-   const IKReal transOffset_l[3] = {.037,-.3416,0};
-   const IKReal transOffset_r[3] = {-.037,-.3416,0};
+   const IKReal transOffset_l[3] = {.037,-.3081,0};
+   const IKReal transOffset_r[3] = {-.037,-.3081,0};
    IKReal* pfree = NULL;
    leftleg::IKSolver solver_l;
    rightleg::IKSolver solver_r;

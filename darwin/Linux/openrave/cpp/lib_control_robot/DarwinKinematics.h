@@ -20,10 +20,14 @@ class Kinematics{
   void setAngle(int index, float value);
   Transform3f getTransform();
   bool setTransform(Transform3f trans);
-  bool setT_PostOffset(Transform3f dt);
-  bool setT_PreOffset(Transform3f dt);
+  bool setT_Offset(Transform3f dt);
+  bool setT_Offset(vec3f trans);
+  bool setT_Offset(quatf q);
   ForwardKinematics getFKinObj();
   FootFrame getFrame();
+
+  // testing
+  void testing(vec3f result[]);
 
   // use floats
   bool IKleft(Transform3f transform , float solution[]);
@@ -31,8 +35,9 @@ class Kinematics{
   bool IKleft(float solution[]);
   bool IKright(float solution[]);
 
- private:
   ForwardKinematics fKin;
+
+ private:
   FootFrame Frame;
   Transform3f t_foot;
   Transform3f b_transform;
