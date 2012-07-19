@@ -21,7 +21,7 @@ class StatusClient {
  public:
   StatusClient();
   ~StatusClient() {}
-  std::string GetData();
+  std::string GetData(struct timespec* ts=NULL);
   void Run();
   void Stop();
 
@@ -41,6 +41,7 @@ class StatusClient {
   void MeasureDelay(const std::string& server_time);
 
   boost::mutex data_mutex_;
+  struct timespec data_timestamp_;
   std::string data_;
   asio::io_service io_service_;
   long packet_seq_num_;

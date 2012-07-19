@@ -92,6 +92,7 @@ std::string MakeTimespecString(struct timespec ts) {
 
 StatusClient::StatusClient() :
     data_mutex_(),
+    data_timestamp_(),
     data_(),
     io_service_(),
     packet_seq_num_(-1),
@@ -106,6 +107,9 @@ StatusClient::StatusClient() :
     worker_(NULL),
     io_thread_()
 {
+  data_timestamp_.tv_sec = -1;
+  data_timestamp_.tv_nsec = -1;
+
   if (FLAGS_multicast) {
     // Maybe should just always do this, in initializer list?
     multicast_endpoint_.address(
@@ -114,9 +118,10 @@ StatusClient::StatusClient() :
   }
 }
 
-std::string StatusClient::GetData() {
+std::string StatusClient::GetData(struct timespec* ts) {
   {
     boost::lock_guard<boost::mutex> lock(data_mutex_);
+    if (ts != NULL) *ts = data_timestamp_;
     return data_;
   }
 }
@@ -200,10 +205,12 @@ void StatusClient::ParseDataFromBuffer(const std::vector<char>& buffer,
     }
     start_pos = nl_pos + 1;
   }
+  struct timespec ts = {-1, -1};
   if (FLAGS_include_timestamp) {
     size_t nl_pos = payload.find('\n', start_pos);
+    std::string timestamp = payload.substr(start_pos, nl_pos);
+    ts = MakeTimespecFromString(timestamp);
     if (FLAGS_measure_latency) {
-      std::string timestamp = payload.substr(start_pos, nl_pos);
       MeasureDelay(timestamp);
     }
     start_pos = nl_pos + 1;
@@ -211,6 +218,7 @@ void StatusClient::ParseDataFromBuffer(const std::vector<char>& buffer,
   {
     boost::lock_guard<boost::mutex> lock(data_mutex_);
     data_.assign(payload, start_pos, payload.size());
+    data_timestamp_ = ts;
   }
 }
 
