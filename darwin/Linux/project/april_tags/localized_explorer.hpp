@@ -40,7 +40,7 @@ class LocalizedExplorer {
   void InitializeMotionFramework();
   void InitializeMotionModules();
   void MeasureSystemLatency();
-  LocalizedObjectMap RetrieveObjectData();
+  LocalizedObjectMap RetrieveObjectData(struct timespec* ts=NULL);
   cv::Vec3d GetGoalDirection(const LocalizedObject& head,
                              const LocalizedObjectMap& obj_map);
   cv::Vec3d ConvertGoalDirection(const LocalizedObject& head_obj,
