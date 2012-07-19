@@ -175,7 +175,7 @@ void LocalizedExplorer::MeasureSystemLatency() {
 void LocalizedExplorer::Process() {
   usleep(1000 * 1000 / FLAGS_fps_target);
   std::cout << "\n";
-  struct timespec ts;
+  Timestamp ts;
   LocalizedObjectMap obj_map = RetrieveObjectData(&ts);
   if (obj_map.count("head") == 0) {
     // TODO: also try to point head using body tag, if we can't see head?
@@ -190,7 +190,7 @@ void LocalizedExplorer::Process() {
 }
 
 LocalizedExplorer::LocalizedObjectMap LocalizedExplorer::RetrieveObjectData(
-    struct timespec* ts) {
+    Timestamp* ts) {
   LocalizedObjectMap obj_map;
   // Retrieve data from localization client, extract head rotation info.
   std::string data = client_.GetData(ts);
@@ -281,7 +281,7 @@ void LocalizedExplorer::PointHeadToward(const LocalizedObject& head_obj,
 void LocalizedExplorer::SaveHeadData() {
   Head* head = Head::GetInstance();
   HeadData data;
-  clock_gettime(CLOCK_REALTIME, &data.ts);
+  data.ts = Timestamp::Now();
   data.pan = head->m_Joint.GetAngle(JointData::ID_HEAD_PAN);
   data.tilt = head->m_Joint.GetAngle(JointData::ID_HEAD_TILT);
   head_data_cache_.push_back(data);

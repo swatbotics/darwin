@@ -2,10 +2,11 @@
 #define STATUS_CLIENT_HPP
 
 #include <string>
-#include <time.h>
 
 #include <boost/asio.hpp>
 #include <boost/thread/thread.hpp>
+
+#include "timestamp.hpp"
 
 namespace boost {
 namespace asio {
@@ -21,7 +22,7 @@ class StatusClient {
  public:
   StatusClient();
   ~StatusClient() {}
-  std::string GetData(struct timespec* ts=NULL);
+  std::string GetData(Timestamp* ts=NULL);
   void Run();
   void Stop();
 
@@ -38,10 +39,10 @@ class StatusClient {
                       std::size_t bytes_transferred);
   void ParseDataFromBuffer(const std::vector<char>& buffer,
                            size_t num_bytes);
-  void MeasureDelay(const std::string& server_time);
+  void MeasureDelay(const Timestamp& server_time);
 
   boost::mutex data_mutex_;
-  struct timespec data_timestamp_;
+  Timestamp data_timestamp_;
   std::string data_;
   asio::io_service io_service_;
   long packet_seq_num_;
@@ -52,7 +53,7 @@ class StatusClient {
   std::vector<char> send_buffer_;
   std::vector<char> recv_buffer_;
   std::vector<char> multicast_recv_buffer_;
-  struct timespec request_send_time_;
+  Timestamp request_send_time_;
   asio::io_service::work* worker_;
   asio::thread io_thread_;
 };
