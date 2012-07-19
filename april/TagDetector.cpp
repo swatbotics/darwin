@@ -408,6 +408,8 @@ void TagDetector::getQuads_MZ(const Images& images,
                         params.adaptiveThresholdValue);
 
 
+  END_PROFILE(2, 0);
+
   if (debug) {
     emitDebugImage(debugWindowName,
                    2, 0, debugNumberFiles,
@@ -416,7 +418,6 @@ void TagDetector::getQuads_MZ(const Images& images,
                    ScaleNone, true);
   }
 
-  END_PROFILE(2, 0);
 
   START_PROFILE(3, 0, "find contours");
 
@@ -426,6 +427,8 @@ void TagDetector::getQuads_MZ(const Images& images,
   cv::findContours(thresh, contours, hierarchy,
                    CV_RETR_CCOMP,
                    CV_CHAIN_APPROX_SIMPLE);
+
+  END_PROFILE(3, 0);
 
   if (debug) {
 
@@ -464,7 +467,6 @@ void TagDetector::getQuads_MZ(const Images& images,
 
   }
 
-  END_PROFILE(3, 0);
 
   START_PROFILE(4, 0, "compute convex hulls");
 
@@ -493,6 +495,8 @@ void TagDetector::getQuads_MZ(const Images& images,
 
     }
   }
+
+  END_PROFILE(4, 0);
 
   if (debug) {
 
@@ -530,7 +534,6 @@ void TagDetector::getQuads_MZ(const Images& images,
 
   }
 
-  END_PROFILE(4, 0);
 
   START_PROFILE(5, 0, "find maximum inscribed quadrilaterals");
 
@@ -843,13 +846,11 @@ void TagDetector::refineQuads(const Images& images,
 
   START_PROFILE(7,1, "refine quads");
 
-
   for (size_t i=0; i<quads.size(); ++i) {
     
     Quad& quad = *(quads[i]);
 
     refineQuad( images, quad );
-
 
   }
 
@@ -879,12 +880,6 @@ void TagDetector::getQuads_AT(const Images& images,
       fimseg = images.fim;
     } else {
       cv::GaussianBlur(images.fimOrig, fimseg, cv::Size(0,0), params.segSigma);
-    }
-    if (debug) { 
-      emitDebugImage(debugWindowName, 
-                     2, 0, debugNumberFiles,
-                     "Seg. Blur", 
-                     fimseg, ScaleNone, true); 
     }
   } else {
     fimseg = images.fimOrig;
@@ -940,6 +935,13 @@ void TagDetector::getQuads_AT(const Images& images,
   END_PROFILE(2,0);
 
   if (debug) {
+
+    if (params.segSigma > 0) {
+      emitDebugImage(debugWindowName, 
+                     2, 0, debugNumberFiles,
+                     "Seg. Blur", 
+                     fimseg, ScaleNone, true); 
+    }
 
     at::real mmin =  AT_REAL_MAX;
     at::real mmax = -AT_REAL_MAX;
@@ -1188,6 +1190,8 @@ void TagDetector::getQuads_AT(const Images& images,
     }
   }
 
+  END_PROFILE(4,0);
+
   if (debug) {
 
     size_t cidx = 0;
@@ -1221,8 +1225,6 @@ void TagDetector::getQuads_AT(const Images& images,
                    m, ScaleNone, true);
 
   }
-
-  END_PROFILE(4,0);
 
   ///////////////////////////////////////////////////////////
   // Step five. Loop over the clusters, fitting lines (which we
@@ -1331,7 +1333,6 @@ void TagDetector::getQuads_AT(const Images& images,
                    rgbu, ScaleNone, false);
   }
 
-  int width = images.fim.cols, height = images.fim.rows;
   
   ////////////////////////////////////////////////////////////////
   // Step six. For each segment, find segments that begin where
@@ -1340,6 +1341,8 @@ void TagDetector::getQuads_AT(const Images& images,
   // (essentially) a 2D hash table.
 
   START_PROFILE(6,0, "find children");
+
+  int width = images.fim.cols, height = images.fim.rows;
 
   Gridder gridder(0, 0, width, height, 10);
   for (size_t i=0; i<segments.size(); ++i) {
@@ -1454,21 +1457,23 @@ void TagDetector::makeImages(const cv::Mat& orig,
 
     END_PROFILE(1, 2);
 
+      /*
+
     START_PROFILE(1, 3, "compute image gradients");
 
     if (params.refineQuads || params.refineBad) {
       
-      /*
       cv::Sobel( images.origBW8, images.gx, at::IMAGE_TYPE, 1, 0 );
       cv::Sobel( images.origBW8, images.gy, at::IMAGE_TYPE, 0, 1 );
       
       images.gx *= 0.25;
       images.gy *= 0.25;
-      */
 
     }
 
     END_PROFILE(1, 3);
+    
+      */
 
   }
 
@@ -1488,12 +1493,6 @@ void TagDetector::makeImages(const cv::Mat& orig,
 
     if (params.sigma > 0) {
       cv::GaussianBlur(images.fimOrig, images.fim, cv::Size(0,0), params.sigma);
-      if (debug) { 
-        emitDebugImage(debugWindowName, 
-                       1, 0, debugNumberFiles,
-                       "Blur", 
-                       images.fim, ScaleNone, true); 
-      }
     } else {
       images.fim = images.fimOrig;
     }
@@ -1502,9 +1501,16 @@ void TagDetector::makeImages(const cv::Mat& orig,
 
   }
 
+  END_PROFILE(1,0);
+
   if (debug) {
 
-    START_PROFILE(1, 6, "make RGB debug image");
+    if (!params.newQuadAlgorithm && params.sigma > 0) {
+      emitDebugImage(debugWindowName, 
+                     1, 0, debugNumberFiles,
+                     "Blur", 
+                     images.fim, ScaleNone, true); 
+    }
 
     cv::Mat rgb;
     if (images.orig.channels() == 3) {
@@ -1522,11 +1528,8 @@ void TagDetector::makeImages(const cv::Mat& orig,
       images.origRGB = rgb;
     }
 
-    END_PROFILE(1, 6);
-
   }
   
-  END_PROFILE(1,0);
 
 }
 
@@ -1607,24 +1610,15 @@ void TagDetector::refineQuadLSQ(const Images& images,
 
   at::real zoom = sqrt(quad_area / tag_area);
 
-  at::real outer = std::min(zoom*wb, at::real(2));
-  at::real inner = std::max(at::real(0.25)*zoom*bb, at::real(0.75));
-  at::real edge  = std::max(at::real(0.2)*zoom*bb, at::real(0.5));
+  at::real outer = std::min(zoom*wb, at::real(5));
+  at::real inner = std::max(at::real(0.75)*zoom*bb, at::real(0.75));
+  at::real edge  = std::max(at::real(0.5)*zoom*bb, at::real(0.5));
 
+  int border = outer+at::real(0.5);
 
-  /*
-  at::real outer = 1.5;
-  at::real inner = 0.75;
-  at::real edge  = 0.5;
-  */
-
-  int border = outer+1;
-
-  // get the bounding box and dilate it
   cv::Size sz = images.orig.size();
   cv::Rect r = boundingRect(quad.p, sz);
   dilate(r, border, sz);
-
 
   DSegment dsegs[4];
 
@@ -1654,7 +1648,7 @@ void TagDetector::refineQuadLSQ(const Images& images,
     }
   }
 
-  if (debug && 1) {
+  if (debug && 0) {
 
     cv::Mat_<cv::Vec3b> rgbu = images.origRGB/2 + 127;
 

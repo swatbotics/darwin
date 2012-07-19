@@ -15,7 +15,7 @@
 #define U2D_DEV_NAME "/dev/ttyUSB0"
 
 DEFINE_bool(quiet, false, "Set to reduce amount of output shown.");
-DEFINE_double(fps_target, 15, "Target frames per second to run at.");
+DEFINE_double(fps_target, 50, "Target frames per second to run at.");
 
 DEFINE_string(goal_object, "",
               "Object whose frame goal coordinates are specified in; the "
@@ -33,8 +33,13 @@ DEFINE_double(tilt_pgain, 0.05, "Tilt controller proportional gain.");
 DEFINE_double(tilt_igain, 0.0, "Tilt controller integral gain.");
 DEFINE_double(tilt_dgain, 0.0, "Tilt controller derivative gain.");
 
+DEFINE_double(servo_pan_pgain, 8, "Pan servo proportional gain.");
+DEFINE_double(servo_tilt_pgain, 8, "Tilt servo proportional gain.");
+
 DEFINE_bool(latency_test, true,
             "Run a test to determine overall system latency.");
+DEFINE_bool(latency_test_square_wave, false,
+            "Use a square wave instead of a sinusoid for latency testing.");
 DEFINE_double(latency_test_length, 10.0,
               "Length of latency test in seconds.");
 DEFINE_double(latency_test_amplitude, 30.0,
@@ -114,8 +119,8 @@ void LocalizedExplorer::InitializeMotionModules() {
   Head* head = Head::GetInstance();
   manager->AddModule(head);
   head->m_Joint.SetEnableHeadOnly(true, true);
-  head->m_Joint.SetPGain(JointData::ID_HEAD_PAN, 4); //8);
-  head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, 4); //8);
+  head->m_Joint.SetPGain(JointData::ID_HEAD_PAN, FLAGS_servo_pan_pgain);
+  head->m_Joint.SetPGain(JointData::ID_HEAD_TILT, FLAGS_servo_tilt_pgain);
   MotionStatus::m_CurrentJoints.SetEnableBodyWithoutHead(false);
   manager->SetEnable(true);
 }
@@ -128,33 +133,38 @@ void LocalizedExplorer::MeasureSystemLatency() {
 
   double start_time = get_time_as_double();
   double elapsed_time = 0.0;
-  while (elapsed_time < FLAGS_latency_test_length) {
-    elapsed_time = get_time_as_double() - start_time;
+  while ((elapsed_time = (get_time_as_double() - start_time))
+         < FLAGS_latency_test_length) {
     double A = FLAGS_latency_test_amplitude;
     double B = FLAGS_latency_test_offset;
     double T = FLAGS_latency_test_period;
     double t = elapsed_time;
-    double angle = A * sin(t * (2 * M_PI) / T) + B;
-    Head::GetInstance()->MoveByAngle(angle, kLatencyTestTilt);
+    double angle = 0;
+    if (FLAGS_latency_test_square_wave) {
+      angle = A * (sin(t * (2 * M_PI) / T) >= 0 ? 1 : -1) + B;
+    } else {
+      angle = A * sin(t * (2 * M_PI) / T) + B;
+    }
+    Head* head = Head::GetInstance();
+    head->MoveByAngle(angle, kLatencyTestTilt);
+    double servo_angle = head->m_Joint.GetAngle(JointData::ID_HEAD_PAN);
 
     LocalizedObjectMap obj_map = RetrieveObjectData();
     if (obj_map.count("head") == 0 || obj_map.count("body") == 0) {
       std::cerr << "Cannot see head and body for latency measurements!\n";
       continue;
     }
-    LocalizedObject head = obj_map["head"];
-    LocalizedObject body = obj_map["body"];
+    LocalizedObject head_obj = obj_map["head"];
+    LocalizedObject body_obj = obj_map["body"];
     cv::Mat head_r_mat;
     cv::Mat body_r_mat;
-    cv::Rodrigues(head.r, head_r_mat);
-    cv::Rodrigues(body.r, body_r_mat);
+    cv::Rodrigues(head_obj.r, head_r_mat);
+    cv::Rodrigues(body_obj.r, body_r_mat);
     cv::Mat head_x = head_r_mat.col(0);
     cv::Mat body_x = body_r_mat.col(0);
-    //    std::cout << "head_x = " << head_x << "\n";
-    //    std::cout << "body_x = " << body_x << "\n";
     double seen_angle = acos(head_x.dot(body_x)) * 180 / M_PI;
-    fprintf(stdout, "Time: %7.3f - Angle: %5.1f - Seen angle: %5.1f\n",
-            elapsed_time, angle, seen_angle);
+    printf("Time: %7.3f  Output: %5.1f  Servo: %5.1f  Seen: %5.1f\n",
+           elapsed_time, angle, servo_angle, seen_angle);
   }
 }
 
@@ -192,8 +202,8 @@ cv::Vec3d LocalizedExplorer::GetGoalDirection(
     const LocalizedObject& head,
     const LocalizedObjectMap& obj_map) {
   // Determine whether goal frame is an object or the world frame.
-  cv::Mat_<double> r_obj_to_world = cv::Mat_<double>::eye(3, 3);
-  cv::Mat_<double> t_obj_to_world = cv::Mat_<double>::zeros(3, 1);
+  static cv::Mat_<double> r_obj_to_world = cv::Mat_<double>::eye(3, 3);
+  static cv::Mat_<double> t_obj_to_world = cv::Mat_<double>::zeros(3, 1);
   if (!FLAGS_goal_object.empty() && obj_map.count(FLAGS_goal_object) > 0) {
     LocalizedObjectMap::const_iterator it = obj_map.find(FLAGS_goal_object);
     if (it == obj_map.end()) {
