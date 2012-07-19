@@ -35,6 +35,8 @@ class LocalizedExplorer {
   LocalizedObjectMap RetrieveObjectData();
   cv::Vec3d GetGoalDirection(const LocalizedObject& head,
                              const LocalizedObjectMap& obj_map);
+  cv::Vec3d ConvertGoalDirection(const LocalizedObject& head_obj,
+                                 const cv::Vec3d& goal_dir);
   void PointHeadToward(const LocalizedObject& head_obj,
                        const cv::Vec3d& goal_dir);
 

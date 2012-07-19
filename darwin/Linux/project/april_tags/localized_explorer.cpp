@@ -179,7 +179,8 @@ void LocalizedExplorer::Process() {
   }
   // TODO: Make the head object an instance member, instead of a param?
   cv::Vec3d goal_dir = GetGoalDirection(obj_map["head"], obj_map);
-  PointHeadToward(obj_map["head"], goal_dir);
+  cv::Vec3d goal_rel = ConvertGoalDirection(obj_map["head"], goal_dir);
+  PointHeadToward(obj_map["head"], goal_rel);
 }
 
 LocalizedExplorer::LocalizedObjectMap LocalizedExplorer::RetrieveObjectData() {
@@ -233,13 +234,19 @@ cv::Vec3d LocalizedExplorer::GetGoalDirection(
   return goal_dir;
 }
 
-void LocalizedExplorer::PointHeadToward(const LocalizedObject& head_obj,
-                                        const cv::Vec3d& goal_dir) {
-  // Compute relative angles of the goal axis from the head axis.
+cv::Vec3d LocalizedExplorer::ConvertGoalDirection(
+    const LocalizedObject& head_obj, const cv::Vec3d& goal_dir) {
   cv::Mat head_r_mat;
   cv::Rodrigues(head_obj.r, head_r_mat);
+  // TODO: adjust head_r_mat to compensate for current head position.
   cv::Mat goal_rel = head_r_mat.inv() * cv::Mat(goal_dir);
   std::cout << "goal_rel = " << goal_rel << "\n";
+  return goal_rel;
+}
+
+void LocalizedExplorer::PointHeadToward(const LocalizedObject& head_obj,
+                                        const cv::Vec3d& goal_rel) {
+  // Compute relative angles of the goal axis from the head axis.
   cv::Point3d goal_rel_pt(goal_rel);
   double hypot = cv::norm(goal_rel_pt);
   double hypot_xy = cv::norm(cv::Point2d(goal_rel_pt.x, goal_rel_pt.y));
