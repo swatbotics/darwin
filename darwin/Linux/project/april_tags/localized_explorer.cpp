@@ -195,8 +195,8 @@ cv::Vec3d LocalizedExplorer::GetGoalDirection(
     const LocalizedObject& head,
     const LocalizedObjectMap& obj_map) {
   // Determine whether goal frame is an object or the world frame.
-  cv::Mat_<double> r_obj_to_world = cv::Mat_<double>::eye(3, 3);
-  cv::Mat_<double> t_obj_to_world = cv::Mat_<double>::zeros(3, 1);
+  static cv::Mat_<double> r_obj_to_world = cv::Mat_<double>::eye(3, 3);
+  static cv::Mat_<double> t_obj_to_world = cv::Mat_<double>::zeros(3, 1);
   if (!FLAGS_goal_object.empty() && obj_map.count(FLAGS_goal_object) > 0) {
     LocalizedObjectMap::const_iterator it = obj_map.find(FLAGS_goal_object);
     if (it == obj_map.end()) {
