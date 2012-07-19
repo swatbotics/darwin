@@ -50,6 +50,9 @@ DEFINE_double(latency_test_offset, 30.0,
 DEFINE_double(latency_test_period, 2.0,
               "Period of latency test sinusoid in seconds.");
 
+DEFINE_int32(head_data_cache_max_size, 1000,
+             "Maximum size of cache for head data values.");
+
 namespace Robot {
 
 LocalizedExplorer::LocalizedObject::LocalizedObject() {
@@ -79,7 +82,8 @@ LocalizedExplorer::LocalizedExplorer() :
     cm730_(NULL),
     client_(),
     pan_controller_(FLAGS_pan_pgain, FLAGS_pan_igain, FLAGS_pan_dgain),
-    tilt_controller_(FLAGS_tilt_pgain, FLAGS_tilt_igain, FLAGS_tilt_dgain) {
+    tilt_controller_(FLAGS_tilt_pgain, FLAGS_tilt_igain, FLAGS_tilt_dgain),
+    head_data_cache_() {
 }
 
 LocalizedExplorer::~LocalizedExplorer() {}
@@ -181,6 +185,7 @@ void LocalizedExplorer::Process() {
   cv::Vec3d goal_dir = GetGoalDirection(obj_map["head"], obj_map);
   cv::Vec3d goal_rel = ConvertGoalDirection(obj_map["head"], goal_dir);
   PointHeadToward(obj_map["head"], goal_rel);
+  SaveHeadData();
 }
 
 LocalizedExplorer::LocalizedObjectMap LocalizedExplorer::RetrieveObjectData() {
@@ -269,6 +274,18 @@ void LocalizedExplorer::PointHeadToward(const LocalizedObject& head_obj,
             << " " << tilt_controller_.GetIntegralError()
             << " " << tilt_controller_.GetDerivativeError()
             << " ==> " << tilt_output << "\n";
+}
+
+void LocalizedExplorer::SaveHeadData() {
+  Head* head = Head::GetInstance();
+  HeadData data;
+  clock_gettime(CLOCK_REALTIME, &data.ts);
+  data.pan = head->m_Joint.GetAngle(JointData::ID_HEAD_PAN);
+  data.tilt = head->m_Joint.GetAngle(JointData::ID_HEAD_TILT);
+  head_data_cache_.push_back(data);
+  if (head_data_cache_.size() > (size_t) FLAGS_head_data_cache_max_size) {
+    head_data_cache_.pop_front();
+  }
 }
 
 }  // namespace Robot

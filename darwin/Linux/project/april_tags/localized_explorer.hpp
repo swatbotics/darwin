@@ -1,6 +1,8 @@
 #ifndef LOCALIZED_EXPLORER_HPP
 #define LOCALIZED_EXPLORER_HPP
 
+#include <deque>
+
 #include <opencv2/core/core.hpp>
 
 #include "CM730.h"
@@ -29,6 +31,12 @@ class LocalizedExplorer {
   };
   typedef std::map<std::string, LocalizedObject> LocalizedObjectMap;
 
+  struct HeadData {
+    struct timespec ts;
+    double pan;
+    double tilt;
+  };
+
   void InitializeMotionFramework();
   void InitializeMotionModules();
   void MeasureSystemLatency();
@@ -39,11 +47,13 @@ class LocalizedExplorer {
                                  const cv::Vec3d& goal_dir);
   void PointHeadToward(const LocalizedObject& head_obj,
                        const cv::Vec3d& goal_dir);
+  void SaveHeadData();
 
   CM730* cm730_;
   StatusClient client_;
   PIDController pan_controller_;
   PIDController tilt_controller_;
+  std::deque<HeadData> head_data_cache_;
 };
 
 }  // namespace Robot
