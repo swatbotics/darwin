@@ -48,18 +48,19 @@ class LocalizedExplorer {
   void InitializeMotionFramework();
   void InitializeMotionModules();
   void MeasureSystemLatency();
-  LocalizedObjectMap RetrieveObjectData(Timestamp* ts=NULL);
-  cv::Vec3d GetGoalDirection(const LocalizedObject& head,
-                             const LocalizedObjectMap& obj_map);
-  cv::Vec3d ConvertGoalDirection(const LocalizedObject& head_obj,
-                                 const cv::Vec3d& goal_dir);
-  void PointHeadToward(const LocalizedObject& head_obj,
-                       const cv::Vec3d& goal_dir);
+  bool RetrieveObjectData();
+  cv::Vec3d GetGoalDirection();
+  cv::Vec3d ConvertGoalDirection(const cv::Vec3d& goal_dir);
+  void PointHeadToward(const cv::Vec3d& goal_rel);
   HeadData GetCachedHeadData();
   void SaveHeadData();
 
   CM730* cm730_;
   StatusClient client_;
+  LocalizedObjectMap obj_map_;
+  LocalizedObject head_obj_;
+  LocalizedObject body_obj_;
+  Timestamp data_ts_;
   PIDController pan_controller_;
   PIDController tilt_controller_;
   std::deque<HeadData> head_data_cache_;
