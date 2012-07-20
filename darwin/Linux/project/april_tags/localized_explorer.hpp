@@ -45,13 +45,18 @@ class LocalizedExplorer {
     HeadPos pos;
   };
 
+  static const double kTiltOffset;
+
   void InitializeMotionFramework();
   void InitializeMotionModules();
-  void MeasureSystemLatency();
   bool RetrieveObjectData();
+  void MeasureSystemLatency();
+  HeadPos GetGoalAngles();
+  HeadPos GetHeadEstimateAngles();
+  HeadPos GetPanTiltForVector(const cv::Vec3d& vec);
   cv::Vec3d GetGoalDirection();
-  cv::Vec3d ConvertGoalDirection(const cv::Vec3d& goal_dir);
-  void PointHeadToward(const cv::Vec3d& goal_rel);
+  cv::Vec3d GetSeenHeadDirection();
+  void DriveHeadToward(HeadPos goal, HeadPos estimate);
   HeadData GetCachedHeadData();
   void SaveHeadData();
 

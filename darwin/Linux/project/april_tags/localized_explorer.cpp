@@ -26,10 +26,10 @@ DEFINE_bool(goal_axis_only, false,
 DEFINE_double(goal_x, 0.0, "Goal x-coordinate.");
 DEFINE_double(goal_y, 0.0, "Goal y-coordinate.");
 DEFINE_double(goal_z, 0.0, "Goal z-coordinate.");
-DEFINE_double(pan_pgain, 0.05, "Pan controller proportional gain.");
+DEFINE_double(pan_pgain, 0.1, "Pan controller proportional gain.");
 DEFINE_double(pan_igain, 0.0, "Pan controller integral gain.");
 DEFINE_double(pan_dgain, 0.0, "Pan controller derivative gain.");
-DEFINE_double(tilt_pgain, 0.05, "Tilt controller proportional gain.");
+DEFINE_double(tilt_pgain, 0.1, "Tilt controller proportional gain.");
 DEFINE_double(tilt_igain, 0.0, "Tilt controller integral gain.");
 DEFINE_double(tilt_dgain, 0.0, "Tilt controller derivative gain.");
 
@@ -54,6 +54,8 @@ DEFINE_int32(head_data_cache_max_size, 1000,
              "Maximum size of cache for head data values.");
 
 namespace Robot {
+
+const double LocalizedExplorer::kTiltOffset = 40.0;
 
 LocalizedExplorer::LocalizedObject::LocalizedObject() {
   Initialize();
@@ -88,7 +90,7 @@ LocalizedExplorer::HeadPos LocalizedExplorer::HeadPos::Current() {
   Head* head = Head::GetInstance();
   HeadPos pos;
   pos.pan = head->m_Joint.GetAngle(JointData::ID_HEAD_PAN);
-  pos.tilt = head->m_Joint.GetAngle(JointData::ID_HEAD_TILT);
+  pos.tilt = head->m_Joint.GetAngle(JointData::ID_HEAD_TILT) - kTiltOffset;
   return pos;
 }
 
@@ -157,6 +159,29 @@ void LocalizedExplorer::InitializeMotionModules() {
   manager->SetEnable(true);
 }
 
+bool LocalizedExplorer::RetrieveObjectData() {
+  // Retrieve data from localization client, extract head rotation info.
+  std::string data = client_.GetData(&data_ts_);
+  if (!FLAGS_quiet) {
+    std::cout << "DATA:\n" << data << "\n";
+  }
+  obj_map_.clear();
+  std::vector<std::string> lines = split(data, '\n');
+  for (std::vector<std::string>::const_iterator it = lines.begin();
+       it != lines.end(); ++it) {
+    LocalizedObject obj(*it);
+    obj_map_[obj.name] = obj;
+  }
+  if (obj_map_.count("head") == 0 || obj_map_.count("body") == 0) {
+    // TODO: Should be able to get by with just one of these two, ideally.
+    // See TODOs for GetGoalAngles() and GetHeadEstimateAngles().
+    return false;
+  }
+  head_obj_ = obj_map_["head"];
+  body_obj_ = obj_map_["body"];
+  return true;
+}
+
 void LocalizedExplorer::MeasureSystemLatency() {
   double kLatencyTestTilt = 40;
   Head::GetInstance()->MoveByAngle(FLAGS_latency_test_offset,
@@ -201,31 +226,60 @@ void LocalizedExplorer::Process() {
   usleep(1000 * 1000 / FLAGS_fps_target);
   std::cout << "\n";
   if (RetrieveObjectData()) {
-    cv::Vec3d goal_dir = GetGoalDirection();
-    cv::Vec3d goal_rel = ConvertGoalDirection(goal_dir);
-    PointHeadToward(goal_rel);
+    HeadPos goal_angles = GetGoalAngles();
+    HeadPos estimate_angles = GetHeadEstimateAngles();
+    DriveHeadToward(goal_angles, estimate_angles);
   }
   SaveHeadData();
 }
 
-bool LocalizedExplorer::RetrieveObjectData() {
-  // Retrieve data from localization client, extract head rotation info.
-  std::string data = client_.GetData(&data_ts_);
-  if (!FLAGS_quiet) {
-    std::cout << "DATA:\n" << data << "\n";
-  }
-  std::vector<std::string> lines = split(data, '\n');
-  for (std::vector<std::string>::const_iterator it = lines.begin();
-       it != lines.end(); ++it) {
-    LocalizedObject obj(*it);
-    obj_map_[obj.name] = obj;
-  }
-  if (obj_map_.count("head") == 0 || obj_map_.count("body") == 0) {
-    return false;
-  }
-  head_obj_ = obj_map_["head"];
-  body_obj_ = obj_map_["body"];
-  return true;
+LocalizedExplorer::HeadPos LocalizedExplorer::GetGoalAngles() {
+  // TODO: If we can't see the body, fall back to using head-relative
+  // pan and tilt values, and then use cached head angles to find the
+  // body-relative pan and tilt values.
+  cv::Vec3d goal_dir = GetGoalDirection();
+  HeadPos goal_angles = GetPanTiltForVector(goal_dir);
+  //  std::cout << "Goal angles: " << goal_angles.pan
+  //            << " " << goal_angles.tilt << "\n";
+  return goal_angles;
+}
+
+LocalizedExplorer::HeadPos LocalizedExplorer::GetHeadEstimateAngles() {
+  // TODO: If we can't see the body or the head, then fall back to just
+  // using the current pan and tilt values from the head, instead of this
+  // fancier estimate that tries to adapt for lag in the servo response.
+  cv::Vec3d seen_head_dir = GetSeenHeadDirection();
+  HeadPos seen_head_angles = GetPanTiltForVector(seen_head_dir);
+  HeadPos cached_head_angles = GetCachedHeadData().pos;
+  HeadPos current_head_angles = HeadPos::Current();
+  // std::cout << "Seen head angles: " << seen_head_angles.pan
+  //           << " " << seen_head_angles.tilt << "\n";
+  // std::cout << "Cached head angles: " << cached_head_angles.pan
+  //           << " " << cached_head_angles.tilt << "\n";
+  // std::cout << "Current head angles: " << current_head_angles.pan
+  //           << " " << current_head_angles.tilt << "\n";
+  HeadPos estimate;
+  estimate.pan = seen_head_angles.pan + (current_head_angles.pan -
+                                         cached_head_angles.pan);
+  estimate.tilt = seen_head_angles.tilt + (current_head_angles.tilt -
+                                           cached_head_angles.tilt);
+  return estimate;
+}
+
+LocalizedExplorer::HeadPos LocalizedExplorer::GetPanTiltForVector(
+    const cv::Vec3d& vec) {
+  HeadPos result;
+  cv::Mat body_r_mat;
+  cv::Rodrigues(body_obj_.r, body_r_mat);
+  cv::Mat point_body = body_r_mat.inv() * (cv::Mat) vec;
+  cv::Point3d new_point = (cv::Vec3d) point_body;
+  double hypot = cv::norm(new_point);
+  double hypot_xy = cv::norm(cv::Point2d(new_point.x, new_point.y));
+  result.pan = asin(new_point.y / hypot_xy) * 180.0 / M_PI;
+  result.tilt = asin(new_point.z / hypot) * 180.0 / M_PI;
+  //  std::cout << "pan_rel = " << pan_rel << "\n";
+  //  std::cout << "tilt_rel = " << tilt_rel << "\n";
+  return result;
 }
 
 cv::Vec3d LocalizedExplorer::GetGoalDirection() {
@@ -261,29 +315,19 @@ cv::Vec3d LocalizedExplorer::GetGoalDirection() {
   return goal_dir;
 }
 
-cv::Vec3d LocalizedExplorer::ConvertGoalDirection(const cv::Vec3d& goal_dir) {
+cv::Vec3d LocalizedExplorer::GetSeenHeadDirection() {
   cv::Mat head_r_mat;
   cv::Rodrigues(head_obj_.r, head_r_mat);
-  // TODO: adjust head_r_mat to compensate for current head position.
-  cv::Mat goal_rel = head_r_mat.inv() * cv::Mat(goal_dir);
-  std::cout << "goal_rel = " << goal_rel << "\n";
-  return goal_rel;
+  return head_r_mat.col(0);
 }
 
-void LocalizedExplorer::PointHeadToward(const cv::Vec3d& goal_rel) {
-  // Compute relative angles of the goal axis from the head axis.
-  cv::Point3d goal_rel_pt(goal_rel);
-  double hypot = cv::norm(goal_rel_pt);
-  double hypot_xy = cv::norm(cv::Point2d(goal_rel_pt.x, goal_rel_pt.y));
-  double pan_rel = asin(goal_rel_pt.y / hypot_xy) * 180.0 / M_PI;
-  double tilt_rel = asin(goal_rel_pt.z / hypot) * 180.0 / M_PI;
-  std::cout << "pan_rel = " << pan_rel << "\n";
-  std::cout << "tilt_rel = " << tilt_rel << "\n";
-
-  // Use relative angles as inputs to PID controllers for head position.
+void LocalizedExplorer::DriveHeadToward(HeadPos goal, HeadPos estimate) {
+  HeadPos err;
+  err.pan = goal.pan - estimate.pan;
+  err.tilt = goal.tilt - estimate.tilt;
   Head* head = Head::GetInstance();
-  double pan_output = pan_controller_.Update(pan_rel);
-  double tilt_output = tilt_controller_.Update(tilt_rel);
+  double pan_output = pan_controller_.Update(err.pan);
+  double tilt_output = tilt_controller_.Update(err.tilt);
   head->MoveByAngle(head->GetPanAngle() + pan_output,
                     head->GetTiltAngle() + tilt_output);
   std::cout << "Pan PID: " << pan_controller_.GetProportionalError()
