@@ -36,7 +36,7 @@ DEFINE_double(tilt_dgain, 0.0, "Tilt controller derivative gain.");
 DEFINE_double(servo_pan_pgain, 16, "Pan servo proportional gain.");
 DEFINE_double(servo_tilt_pgain, 16, "Tilt servo proportional gain.");
 
-DEFINE_bool(latency_test, true,
+DEFINE_bool(latency_test, false,
             "Run a test to determine overall system latency.");
 DEFINE_bool(latency_test_square_wave, false,
             "Use a square wave instead of a sinusoid for latency testing.");
