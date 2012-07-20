@@ -78,6 +78,34 @@ void LocalizedExplorer::LocalizedObject::ParseFromString(
      >> sep2 >> r[0][0] >> r[1][0] >> r[2][0];
 }
 
+
+LocalizedExplorer::HeadPos::HeadPos() :
+    pan(0),
+    tilt(0) {
+}
+
+LocalizedExplorer::HeadPos LocalizedExplorer::HeadPos::Current() {
+  Head* head = Head::GetInstance();
+  HeadPos pos;
+  pos.pan = head->m_Joint.GetAngle(JointData::ID_HEAD_PAN);
+  pos.tilt = head->m_Joint.GetAngle(JointData::ID_HEAD_TILT);
+  return pos;
+}
+
+
+LocalizedExplorer::HeadData::HeadData() :
+    ts(),
+    pos() {
+}
+
+LocalizedExplorer::HeadData LocalizedExplorer::HeadData::Current() {
+  HeadData data;
+  data.ts = Timestamp::Now();
+  data.pos = HeadPos::Current();
+  return data;
+}
+
+
 LocalizedExplorer::LocalizedExplorer() :
     cm730_(NULL),
     client_(),
@@ -278,16 +306,34 @@ void LocalizedExplorer::PointHeadToward(const LocalizedObject& head_obj,
             << " ==> " << tilt_output << "\n";
 }
 
+LocalizedExplorer::HeadData LocalizedExplorer::GetCachedHeadData() {
+  HeadData best;
+  if (head_data_cache_.size() == 0) return best;
+  best = head_data_cache_.front();
+  double best_diff = std::abs((best.ts - data_ts_).ToDouble());
+  while (head_data_cache_.size() > 0) {
+    HeadData current = head_data_cache_.front();
+    double cur_diff = std::abs((current.ts - data_ts_).ToDouble());
+    if (cur_diff <= best_diff) {
+      best = current;
+      best_diff = cur_diff;
+      head_data_cache_.pop_front();
+    } else {
+      break;
+    }
+  }
+  //  std::cout << "Cache ts: " << best.ts << "\n";
+  std::cout << "Cache diff: " << best.ts - data_ts_ << "\n";
+  return best;
+}
+
 void LocalizedExplorer::SaveHeadData() {
-  Head* head = Head::GetInstance();
-  HeadData data;
-  data.ts = Timestamp::Now();
-  data.pan = head->m_Joint.GetAngle(JointData::ID_HEAD_PAN);
-  data.tilt = head->m_Joint.GetAngle(JointData::ID_HEAD_TILT);
+  HeadData data = HeadData::Current();
   head_data_cache_.push_back(data);
   if (head_data_cache_.size() > (size_t) FLAGS_head_data_cache_max_size) {
     head_data_cache_.pop_front();
   }
+  std::cout << "Cache size: " << head_data_cache_.size() << "\n";
 }
 
 }  // namespace Robot

@@ -32,10 +32,17 @@ class LocalizedExplorer {
   };
   typedef std::map<std::string, LocalizedObject> LocalizedObjectMap;
 
-  struct HeadData {
-    Timestamp ts;
+  struct HeadPos {
+    static HeadPos Current();
+    HeadPos();
     double pan;
     double tilt;
+  };
+  struct HeadData {
+    static HeadData Current();
+    HeadData();
+    Timestamp ts;
+    HeadPos pos;
   };
 
   void InitializeMotionFramework();
@@ -48,6 +55,7 @@ class LocalizedExplorer {
                                  const cv::Vec3d& goal_dir);
   void PointHeadToward(const LocalizedObject& head_obj,
                        const cv::Vec3d& goal_dir);
+  HeadData GetCachedHeadData();
   void SaveHeadData();
 
   CM730* cm730_;
