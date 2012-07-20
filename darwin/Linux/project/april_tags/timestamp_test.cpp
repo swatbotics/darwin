@@ -10,5 +10,6 @@ int main(int argc, char* argv[]) {
   std::cout << (ts * 5) << "\n";
   std::cout << (ts - ts2) << "\n";
   std::cout << Timestamp::Now() << "\n";
+  std::cout << Timestamp::Now().ToDouble() << "\n";
   return 0;
 }
