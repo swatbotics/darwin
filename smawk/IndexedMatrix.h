@@ -4,53 +4,81 @@
 #include "Index.h"
 #include <sstream>
 #include <iomanip>
+#include <assert.h>
+
+//#define IMAT_USE_PTR
 
 template <class Tmat>
 class IndexedMatrix_t {
 private:
 
   const Tmat& mat;
-  IndexSet colset;
+#ifdef IMAT_USE_PTR
+  size_t* colset;
+  size_t ncols;
+#else
+  IndexArray colset;
+#endif
   size_t lod;
-
-
 
 public:
 
   typedef typename Tmat::value_type value_type;
   
   IndexedMatrix_t(const Tmat& m, int l=0):
-    mat(m), colset(m.cols()), lod(l) {}
+    mat(m), lod(l) {
+
+#ifdef IMAT_USE_PTR
+    ncols = m.cols();
+    colset = new size_t[m.cols()];
+#else
+    colset.resize(m.cols());
+#endif
+
+    for (size_t i=0; i<m.cols(); ++i) { colset[i] = i; }
+
+  }
+
+#ifdef IMAT_USE_PTR
+
+  IndexedMatrix_t(const IndexedMatrix_t<Tmat>& imat):
+    mat(imat.mat), lod(imat.lod)
+  {
+    ncols = imat.ncols;
+    colset = new size_t[imat.ncols];
+    for (size_t i=0; i<ncols; ++i) { colset[i] = imat.colset[i]; }
+  }
+
+  ~IndexedMatrix_t() { delete[] colset; }
+  
+  size_t cols() const { return ncols; }
+
+#else 
+
+  size_t cols() const { return colset.size(); }
+
+#endif
 
   size_t rows() const { return mat.rows() >> lod; }
-  size_t cols() const { return colset.size(); }
 
   void decimateRows() { ++lod; }
 
   void restoreRows() { --lod; }
 
-  size_t reduceCols(IndexArray& subs) {
-    return colset.reduce(subs);
-  }
-  
-  void restoreCols(size_t orig_cols, IndexArray& work) {
-    colset.restore(orig_cols, work);
-  }
-
-  void restoreCols(size_t orig_cols, IndexArray& optima, IndexArray& work) {
-    colset.restore(orig_cols, optima, work);
+  void makeSquare() { 
+#ifdef IMAT_USE_PTR
+    ncols = rows();
+#else
+    colset.resize(rows()); 
+#endif
   }
 
-  size_t trueRowIndex(size_t i) const {
-    return ((i+1)<<lod)-1;
-  }
-   
-  size_t trueColIndex(size_t j) const {
-    return colset[j];
+  void replaceColumn(size_t j1, size_t j2) {
+    colset[j1] = colset[j2];
   }
 
   value_type operator()(size_t i, size_t j) const {
-    return mat(trueRowIndex(i), trueColIndex(j));
+    return mat( ((i+1)<<lod)-1, colset[j] );
   }
 
 };

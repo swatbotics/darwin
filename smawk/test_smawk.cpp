@@ -91,18 +91,39 @@ typedef DebugMatrix_t< IntMatrix > DebugIntMatrix;
 
 //////////////////////////////////////////////////////////////////////
 
+
+enum { 
+  test_rows = 9,
+  test_cols = 18
+};
+
+int test_data[test_rows*test_cols] = {
+   25, 21, 13, 10, 20, 13, 19, 35, 37, 41, 58, 66, 82, 99, 124, 133, 156, 178,
+   42, 35, 26, 20, 29, 21, 25, 37, 36, 39, 56, 64, 76, 91, 116, 125, 146, 164, 
+   57, 48, 35, 28, 33, 24, 28, 40, 37, 37, 54, 61, 72, 83, 107, 113, 131, 146,
+   78, 65, 51, 42, 44, 35, 38, 48, 42, 42, 55, 61, 70, 80, 100, 106, 120, 135,
+   90, 76, 58, 48, 49, 39, 42, 48, 39, 35, 47, 51, 56, 63, 80, 86, 97, 110, 
+   103, 85, 67, 56, 55, 44, 44, 49, 39, 33, 41, 44, 49, 56, 71, 75, 84, 96,
+   123, 105, 86, 75, 73, 59, 57, 62, 51, 44, 50, 52, 55, 59, 72, 74, 80, 92,
+   142, 123, 100, 86, 82, 65, 61, 62, 50, 43, 47, 45, 46, 46, 58, 59, 65, 73, 
+   151, 130, 104, 88, 80, 59, 52, 49, 37, 29, 29, 24, 23, 20, 28, 25, 31, 39
+};
+
 int main(int argc, char** argv) {
 
   
   srand(time(NULL));
+  std::less<int> cmp;
 
-  size_t rows = 10;
-  size_t cols = 16;
+  size_t rows = test_rows;
+  size_t cols = test_cols;
+  bool random = false;
   int delay = 0;
 
   if (argc >= 3) {
     rows = atoi(argv[1]);
     cols = atoi(argv[2]);
+    random = true;
   } 
   if (argc >= 4) {
     delay = atoi(argv[3]);
@@ -110,12 +131,13 @@ int main(int argc, char** argv) {
 
   std::vector<int> data(rows*cols, 0);
 
-  IntMatrix morig(rows, cols, &data[0]);
-  std::less<int> cmp;
+  IntMatrix morig(rows, cols, random ? &data[0] : test_data);
 
-  Timer ctime;
-  fillRandomMatrix(morig, 20);
-  std::cout << "construction took " << ctime.elapsed() << " sec.\n\n";
+  if (random) {
+    Timer ctime;
+    fillRandomMatrix(morig, 20);
+    std::cout << "construction took " << ctime.elapsed() << " sec.\n\n";
+  }
 
   DebugIntMatrix dm(morig, delay);
 
@@ -134,7 +156,7 @@ int main(int argc, char** argv) {
   std::cout << "smawk ran " << dm.count
             << " evaluations total in " << stime.elapsed() << " seconds.\n\n";
 
-  if (cols <= 16) {
+  if (cols <= test_cols) {
     debugPrintMatrixAndOptima(morig, cmp, sopt);
   }
   

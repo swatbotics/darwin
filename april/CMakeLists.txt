@@ -16,23 +16,10 @@ link_directories(${OPENCV_LIBRARY_DIRS})
 
 include_directories(${GFLAGS_INCLUDE_DIRS})
 
-set(AT_LIBS apriltagcpp ${OPENCV_LIBRARIES})
-
-if(APPLE)
-set(CGAL_DIR "/opt/local/lib/cmake")
-endif(APPLE)
+set(AT_LIBS apriltagcpp ${OPENCV_LIBRARIES} cgal)
 
 
-find_package(CGAL)
-if (CGAL_FOUND)
-  message("Using CGAL:")
-  include(${CGAL_DIR}/UseCGAL.cmake)
-  message("")
-  if (CGAL_LIBRARY)
-    set(AT_LIBS "${AT_LIBS}" ${CGAL_LIBRARY})
-    add_definitions("-DHAVE_CGAL" "-DCGAL_DISABLE_ROUNDING_MATH_CHECK")
-  endif ()
-endif ()
+add_definitions("-DHAVE_CGAL" "-DCGAL_DISABLE_ROUNDING_MATH_CHECK")
 
 message("CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 if (APPLE)

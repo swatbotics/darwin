@@ -1,3 +1,4 @@
+
 #include "Smawk.h"
 #include "SmawkDebug.h"
 
@@ -13,19 +14,9 @@
 typedef cv::Mat_<cv::Vec3b> Mat3b;
 typedef std::vector<cv::Point> PointArray;
 
-enum {
-  radius = 320,
-  width = 750,
-  height = 750,
-  npoints = 10000,
-};
-
-const double stddev = 0.01;
-
 typedef CGAL::Simple_cartesian<int>   CGK;
 typedef CGK::Point_2                  CGPoint;
 typedef CGAL::Polygon_2<CGK>          CGPolygon_2;
-
 
 CGPoint cv2cg(const cv::Point& p) {
   return CGPoint(p.x, p.y);
@@ -35,7 +26,6 @@ int distsq(const cv::Point& p0, const cv::Point& p1) {
   cv::Point diff = p1-p0;
   return diff.dot(diff);
 }
-
 
 static int area2x(const cv::Point& a, 
                   const cv::Point& b,
@@ -242,12 +232,29 @@ size_t cgalAllFurthest(const PointArray& cpoints,
 }
 
 
+enum {
+  radius = 320,
+  width = 750,
+  height = 750,
+};
+
+
 int main(int argc, char** argv) {
 
   //cv::RNG rng(time(NULL));
   cv::RNG rng(12345);
 
   std::greater<int> cmp;
+
+  int npoints = 1000;
+  double stddev = 0.01;
+
+  if (argc > 1) {
+    npoints = atoi(argv[1]);
+  }
+  if (argc > 2) {
+    stddev = atof(argv[2]);
+  }
 
   while (1) {
 
