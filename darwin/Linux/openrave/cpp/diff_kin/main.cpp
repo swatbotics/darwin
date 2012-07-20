@@ -7,6 +7,7 @@
 float step = 1e-3;
 
 void mattTest() {
+  std::cout<<std::endl<<"mattTest "<<std::endl;
 
   ForwardKinematics myKin;
 
@@ -80,6 +81,7 @@ void mattTest() {
 }
 
 void mattTest2() {
+  std::cout<<std::endl<<"mattTest2 "<<std::endl;
 
   Kinematics myKin;
   ForwardKinematics extraFKin;
@@ -115,7 +117,7 @@ void mattTest2() {
   cv::Mat_<float> J(6,6);
 
   vec3f Jf_func[20];
-
+  /*
   myKin.fKin.update();
   myKin.fKin.getJacobian(8, vec3f(0), Jf_func);
 
@@ -127,7 +129,7 @@ void mattTest2() {
       J(c+3,i) = Jbi[c];
     }
   }
-
+  */
   std::cout << "J = \n" << J << "\n";
   /*
   cv::SVD svd(J);
@@ -182,6 +184,7 @@ void mattTest2() {
 }
 
 void keliangTest() {
+  std::cout<<std::endl<<"keliangTest "<<std::endl;
 
   Kinematics myKin;
   assert(myKin.setT_Offset(vec3f(0,-.1,0)));
@@ -192,6 +195,7 @@ void keliangTest() {
 
   quatf rot = myKin.getTransform().inverse().rotation();
   vec3f trans = myKin.getTransform().inverse().translation();
+
 
   vec3f result[6];
   myKin.testing(result);
@@ -220,9 +224,20 @@ void keliangTest() {
     }
     std::cout<<std::endl;
   }
-    
+}
 
-  /*
+
+void keliangTest1() {
+  std::cout<<std::endl<<"keliangTest1 "<<std::endl;
+
+  Kinematics myKin;
+  assert(myKin.setT_Offset(vec3f(0,-.1,0)));
+  assert(myKin.setT_Offset(quatf::fromOmega(vec3f(-.1,.2,.3))));
+  vec3f delta[3] = {vec3f(step,0,0), vec3f(0,step,0), vec3f(0,0,step)};
+  
+  quatf rot = myKin.getTransform().inverse().rotation();
+  vec3f trans = myKin.getTransform().inverse().translation();
+
   vec3f Jacobian[14];
   vec3f before, after;
   vec3f position = vec3f(-1,1,2);
@@ -231,19 +246,20 @@ void keliangTest() {
   
   myKin.getJacobian(frame,position,Jacobian);
 
-  for (int i=0; i<14; i++){
+  for (int i=0; i<6; i++){
     std::cout<<Jacobian[i]<<std::endl;
   }
-  std::cout<<std::endl<<myKin.getTransform(frame).transformFwd(position);
   std::cout<<std::endl<<std::endl;
 
 
   // rotation
   for (int i=0; i<3; i++){
     assert(myKin.setT_Offset(quatf::fromOmega(-delta[i])));
-    before = myKin.getTransform(frame).transformFwd(position);
+    before = myKin.getTransform().inverse().transformFwd(   myKin.getTransform(frame).transformFwd(position)  );
+      before = myKin.getTransform(frame).transformFwd(position);
     assert(myKin.setT_Offset(quatf::fromOmega(2*delta[i])));
-    after = myKin.getTransform(frame).transformFwd(position);
+    after = myKin.getTransform().inverse().transformFwd(   myKin.getTransform(frame).transformFwd(position)  );
+      after = myKin.getTransform(frame).transformFwd(position);
     assert(myKin.setT_Offset(quatf::fromOmega(-delta[i])));
     std::cout<<(after-before)/(2*step)<<std::endl;
   }
@@ -259,6 +275,68 @@ void keliangTest() {
   }
 
   std::cout<<std::endl<<myKin.getTransform().matrix()<<std::endl;
+  
+}
+
+void updatefKin(ForwardKinematics& fKin, float theta[]){
+  for (int a=0; a<6; a++){
+    fKin.setAngle(a+2, theta[a]);
+  }  
+  fKin.update();
+}
+
+
+
+void keliangTest2() {
+
+  std::cout<<std::endl<<"keliangTest2 "<<std::endl;
+
+  Kinematics myKin;
+  assert(myKin.setT_Offset(vec3f(0,-.1,0)));
+  assert(myKin.setT_Offset(quatf::fromOmega(vec3f(-.1,.2,.3))));
+  vec3f delta[3] = {vec3f(step,0,0), vec3f(0,step,0), vec3f(0,0,step)};
+  
+  ForwardKinematics fKin;
+  
+  quatf rot = myKin.getTransform().rotation();
+  vec3f trans = myKin.getTransform().inverse().translation();
+
+
+  vec3f Jacobian[14];
+  vec3f before, after;
+  vec3f position = vec3f(-1,1,2);
+  int frame = 6;
+
+  float sol[6];
+  
+  myKin.getJacobian(frame,position,Jacobian);
+
+  for (int i=0; i<3; i++){
+    std::cout<<Jacobian[i]<<std::endl;
+  }
+  std::cout<<std::endl<<std::endl;
+
+
+  // rotation
+  for (int i=0; i<3; i++){
+    assert(myKin.IKleft(Transform3f((quatf::fromOmega(-delta[i])*rot).inverse(),trans ),sol));
+    updatefKin(fKin, sol);
+    before = fKin.getTransform(frame).transformFwd(position);
+    assert(myKin.IKleft(Transform3f((quatf::fromOmega(delta[i])*rot).inverse(),trans ),sol));
+    updatefKin(fKin, sol);
+    after = fKin.getTransform(frame).transformFwd(position);
+    std::cout<<(after-before)/(2*step)<<std::endl;
+  }
+
+  /*  // translation
+  for (int i=0; i<3; i++){
+    assert(myKin.setT_Offset(-delta[i]));
+    before = myKin.getTransform(frame).transformFwd(position);
+    assert(myKin.setT_Offset(2*delta[i]));
+    after = myKin.getTransform(frame).transformFwd(position);
+    assert(myKin.setT_Offset(-delta[i]));
+    std::cout<<(after-before)/(2*step)<<std::endl;
+  }
   */
 
 }
@@ -270,10 +348,13 @@ int main(int argc, char** argv){
   
   //  mattTest();
 
-  mattTest2();
+  //  mattTest2();
+  
+  //keliangTest();
 
-  //  keliangTest();
-
+  keliangTest1();
+  
+   //  keliangTest2();
 
   
 

@@ -14,11 +14,11 @@ class Kinematics{
   void getCOMJacobian(int attachedFrame, vec3f result[14]);
   void getCOMJacobian(vec3f result[14]);
   vec3f getCOM();
-  Transform3f getTransform(int frame);
   void changeReferenceFrame();
   void changeReferenceFrame(FootFrame foot);
   void setAngle(int index, float value);
   Transform3f getTransform();
+  Transform3f getTransform(int frame);
   bool setTransform(Transform3f trans);
   bool setT_Offset(Transform3f dt);
   bool setT_Offset(vec3f trans);
@@ -35,9 +35,9 @@ class Kinematics{
   bool IKleft(float solution[]);
   bool IKright(float solution[]);
 
-  ForwardKinematics fKin;
 
  private:
+  ForwardKinematics fKin;
   FootFrame Frame;
   Transform3f t_foot;
   Transform3f b_transform;

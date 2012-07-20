@@ -61,6 +61,7 @@ void Kinematics::getJacobian(int attachedFrame,
   Transform3f trans_from_body = fKin.getTransform(attachedFrame);
   vec3f Jac[20];
   fKin.getJacobian(attachedFrame, position, Jac);
+  mat3f rotJac = -mat3f::cross(R*(trans_from_body.transformFwd(position)));
 
  
   // Columns in rot | trans | head | arm_l | arm_r
@@ -68,7 +69,6 @@ void Kinematics::getJacobian(int attachedFrame,
   // If the attached frame is above body
 
   if (attachedFrame <= 2 || attachedFrame >=15){
-    mat3f rotJac = -mat3f::cross(R*(trans_from_body.transformFwd(position)));
     for (int i=0; i<3; i++){
       result[i] = rotJac.col(i);
     }
@@ -132,8 +132,12 @@ void Kinematics::getJacobian(int attachedFrame,
     for (int i=0; i<3; i++){
       result[3+i] = sol_t.col(i);
     }
+ 
+       
+    mat3f sol_r = rotJac + R*
+      (-fkik_r * R.transpose() - fkik_t*R.transpose()*mat3f::cross(b_transform.translation()));
     
-    mat3f sol_r = mat3f::cross(-R*(trans_from_body.transformFwd(position)))*(fkik_r - fkik_t * R.transpose() * mat3f::cross(b_transform.translation()));
+    //   mat3f sol_r = - fkik_r * R.inverse();
 
     for (int i=0; i<3; i++){
       result[i] = sol_r.col(i);
@@ -153,7 +157,6 @@ void Kinematics::testing(vec3f result[]){
       J.at<float>(i+3,j) = Jb_full[foot-6+j][i];
     }
   }
-  std::cout << "J in DarwinKinematics.cpp:\n" << J << "\n";
 
   cv::Mat J_inv = J.inv();
   cv::Mat dik_t = cv::Mat(J_inv, cv::Rect(3,0,3,6));
