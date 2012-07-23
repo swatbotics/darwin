@@ -1,0 +1,30 @@
+The python folder contains the python scripts for using openrave
+
+The Darwin robot xml file needed to use openrave on is located in the xml
+folder in this directory.
+
+IK_test.py
+This demonstrates how to load a robot, generating/loading a ik module,
+and using IK in openrave. The manipulator indices are:
+0 - left arm
+1 - right arm
+2 - left leg
+3 - right leg
+
+IK_fast_generation.py
+This generates the stand-alone IK cpp file. The manipulator indices are
+the same as above
+
+ForwardKinematicsDataGeneration.py
+This creates two files DarwinDynamicDefinition.h and .cpp. These files can be 
+used to build into an object that contains the dynamic information about the 
+Darwin, including 
+link info: 
+the name of the links
+the center of mass of each of the links
+the axis about which each link rotate
+the transform between the previous joint and the next joint of the link.
+
+chain (limb) info:
+the starting link of each chain
+the starting transform of each chain

@@ -1,0 +1,11 @@
+This folder contains the xml files for the Darwin robot
+
+Copy them to /usr/share/openrave-0.6/robots/
+
+romela-darwin-op.dae
+This is the xml file you should use for the most cases
+
+romela-darwin-op-no-joint-limits.dae
+Use this if you don't want any joint limits. This will ignore joint limit 
+check, which allows you to move all joints 360. Useful if you want to check
+solution to IK. Will not perform collision check.
