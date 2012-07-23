@@ -35,7 +35,7 @@ void Kinematics::getCOMJacobian(vec3f result[14]){
     }
     total_mass += fKin.getMass(i);
   }
-  for (int j=0; j<20; j++){
+  for (int j=0; j<14; j++){
     result[j] = accum[j] / total_mass;
   }
   return;
