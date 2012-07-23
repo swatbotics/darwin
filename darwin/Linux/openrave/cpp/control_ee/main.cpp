@@ -224,10 +224,6 @@ int checkSol(std::vector<IKSolution> solutions){
 
 /* Check center of mass stuff */
 
-static const int jointInd_robot2rave[20] = {17,14,18,15,19,16,//arms
-					    8,2,9,3,10,4,11,5,12,6,13,7,//legs
-					    0,1};//head
-
 bool COMinbounds(std::vector<IKReal> sol_l, std::vector<IKReal> sol_r,
 		 IKReal* bodytrans, IKReal* bodyrot, ForwardKinematics myKin){
   float maxX = .03;
@@ -237,8 +233,7 @@ bool COMinbounds(std::vector<IKReal> sol_l, std::vector<IKReal> sol_r,
   
 
   for (int i=0; i<(int)sol_l.size(); i++){
-    // 2i+8 is the index for the joints on the left foot. 2i+7 for the right
-    // TODO: clean this up to make it readable, NO MAGIC NUMBERS
+    // left leg indices are 2-7, right leg are 8-13
     myKin.setAngle(i+2, sol_l[i]); 
     myKin.setAngle(i+8, sol_r[i]);
   }  
