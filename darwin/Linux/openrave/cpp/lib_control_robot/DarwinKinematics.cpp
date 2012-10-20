@@ -11,7 +11,7 @@
 
 Kinematics::Kinematics(){
   changeReferenceFrame(LeftFoot);
-  b_transform = Transform3f(vec3f(-.037, .3416, 0));
+  b_transform = Transform3f(vec3f(-.037, .3081, 0));
   t_foot = Transform3f(vec3f(-2*.037,0,0));
   return;
 }
@@ -35,7 +35,7 @@ void Kinematics::getCOMJacobian(vec3f result[14]){
     }
     total_mass += fKin.getMass(i);
   }
-  for (int j=0; j<20; j++){
+  for (int j=0; j<14; j++){
     result[j] = accum[j] / total_mass;
   }
   return;
@@ -61,13 +61,14 @@ void Kinematics::getJacobian(int attachedFrame,
   Transform3f trans_from_body = fKin.getTransform(attachedFrame);
   vec3f Jac[20];
   fKin.getJacobian(attachedFrame, position, Jac);
+  mat3f rotJac = -mat3f::cross(R*(trans_from_body.transformFwd(position)));
+
  
   // Columns in rot | trans | head | arm_l | arm_r
 
   // If the attached frame is above body
 
   if (attachedFrame <= 2 || attachedFrame >=15){
-    mat3f rotJac = -R*mat3f::cross((trans_from_body.transformFwd(position)));
     for (int i=0; i<3; i++){
       result[i] = rotJac.col(i);
     }
@@ -131,13 +132,40 @@ void Kinematics::getJacobian(int attachedFrame,
     for (int i=0; i<3; i++){
       result[3+i] = sol_t.col(i);
     }
+ 
+       
+    mat3f sol_r = rotJac + R*
+      (-fkik_r * R.transpose() - fkik_t*R.transpose()*mat3f::cross(b_transform.translation()));
     
-    mat3f sol_r = mat3f::cross(-R*(trans_from_body.transformFwd(position)))*(fkik_r + fkik_t * R.transpose() * mat3f::cross(b_transform.translation()));
+    //   mat3f sol_r = - fkik_r * R.inverse();
 
     for (int i=0; i<3; i++){
       result[i] = sol_r.col(i);
     }
 
+  }
+}
+
+void Kinematics::testing(vec3f result[]){
+  int foot = 8;
+  vec3f Jb_full[20];
+  fKin.getJacobian(foot, vec3f(0,0,0), Jb_full);
+  cv::Mat J = cv::Mat_<float>(6,6);
+  for(int j=0; j<6; j++){
+    for(int i=0; i<3; i++){
+      J.at<float>(i,j) = fKin.getAxis(foot-5+j)[i];
+      J.at<float>(i+3,j) = Jb_full[foot-6+j][i];
+    }
+  }
+
+  cv::Mat J_inv = J.inv();
+  cv::Mat dik_t = cv::Mat(J_inv, cv::Rect(3,0,3,6));
+  cv::Mat dik_r = cv::Mat(J_inv, cv::Rect(0,0,3,6));
+  
+  for (int i=0; i<6; i++){
+    for (int j=0; j<3; j++){
+      result[i][j] = dik_r.at<float>(i,j);
+    }
   }
 }
 
@@ -334,11 +362,15 @@ bool Kinematics::setTransform(Transform3f trans){
   return true;
 }
 
-bool Kinematics::setT_PostOffset(Transform3f dt){
-  return setTransform(b_transform * dt);
+bool Kinematics::setT_Offset(Transform3f dt){
+  return setTransform(dt * b_transform);
 }
 
-bool Kinematics::setT_PreOffset(Transform3f dt){
-  return setTransform(dt * b_transform);
+bool Kinematics::setT_Offset(vec3f trans){
+  return setTransform(Transform3f(b_transform.rotation(), b_transform.translation() + trans));
+}
+
+bool Kinematics::setT_Offset(quatf q){
+  return setTransform(Transform3f(q * b_transform.rotation(), b_transform.translation()));
 }
 

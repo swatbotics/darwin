@@ -2,11 +2,11 @@
 
 #include <iostream>
 #include <sstream>
-#include <time.h>
 
 #include <boost/bind.hpp>
 #include <gflags/gflags.h>
 
+#include "timestamp.hpp"
 #include "util.hpp"
 
 #define DEBUG false
@@ -74,9 +74,8 @@ void StatusServer::SendData(long seq_num, const udp::endpoint& destination,
     sstr << seq_num << "\n";
   }
   if (FLAGS_include_timestamp) {
-    struct timespec curtime;
-    clock_gettime(CLOCK_REALTIME, &curtime);
-    sstr << curtime.tv_sec << " " << curtime.tv_nsec << "\n";
+    Timestamp ts = Timestamp::Now();
+    sstr << ts.ToString() << "\n";
   }
   boost::shared_ptr<std::string> response_data(new std::string(sstr.str()));
   {

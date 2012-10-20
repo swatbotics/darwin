@@ -1,7 +1,7 @@
 from openravepy import *
 env = Environment() # create the environment
 env.SetViewer('qtcoin') # start the viewer
-env.Load('robots/romela-darwin-op-no-joint-limits.dae') # load a scene
+env.Load('robots/romela-darwin-op.dae') # load a scene
 robot = env.GetRobots()[0] # get the first robot
 
 manip = robot.SetActiveManipulator(2)

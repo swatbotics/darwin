@@ -210,7 +210,7 @@ int main(int argc, char** argv)
   IKReal rotation[9] = {1,0,0, 0,1,0, 0,0,1};
   // Base frame is the right foot
   IKReal trans_l[3] = {.037*2,0,0};
-  IKReal trans_body[3] = {.037,.3416,0};
+  IKReal trans_body[3] = {.037,.3081,0};
   IKReal eetrans_l[3] = {0,0,0};
   IKReal eetrans_r[3] = {0,0,0};
   IKReal* pfree = NULL;

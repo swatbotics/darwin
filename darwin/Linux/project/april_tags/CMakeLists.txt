@@ -20,25 +20,31 @@ target_link_libraries(tag_test_tool ${DARWIN_LIBS} apriltagcpp
 add_executable(test_camera_latency test_camera_latency.cpp)
 target_link_libraries(test_camera_latency ${OPENCV_LIBRARIES} pthread gflags)
 
+add_executable(timestamp_test timestamp_test.cpp timestamp.cpp)
+target_link_libraries(timestamp_test rt)
+
 find_package(Boost COMPONENTS system thread)
 if (Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIR})
 
-  add_executable(status_server status_server.cpp status_server_main.cpp)
+  add_executable(status_server status_server.cpp status_server_main.cpp
+    timestamp.cpp)
   target_link_libraries(status_server ${Boost_LIBRARIES} gflags rt)
 
-  add_executable(status_client status_client.cpp status_client_main.cpp)
+  add_executable(status_client status_client.cpp status_client_main.cpp
+    timestamp.cpp)
   target_link_libraries(status_client ${Boost_LIBRARIES} gflags rt)
 
   add_executable(localization_server localization_server.cpp
-    localization_server_main.cpp status_server.cpp localizer.cpp util.cpp)
+    localization_server_main.cpp status_server.cpp localizer.cpp
+    timestamp.cpp util.cpp)
   target_link_libraries(localization_server ${Boost_LIBRARIES}
     apriltagcpp ${OPENCV_LIBRARIES} gflags config++ rt)
 
   add_executable(run_localized_explorer localized_explorer.cpp
-    status_client.cpp pid_controller.cpp util.cpp)
+    status_client.cpp pid_controller.cpp timestamp.cpp util.cpp)
   target_link_libraries(run_localized_explorer ${DARWIN_LIBS}
-    ${OPENCV_LIBRARIES} ${Boost_LIBRARIES} gflags)
+    ${OPENCV_LIBRARIES} ${Boost_LIBRARIES} gflags rt)
 
 else (Boost_FOUND)
   message("Cannot build localization binaries - need boost!")

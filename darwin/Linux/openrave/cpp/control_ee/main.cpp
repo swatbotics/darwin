@@ -224,10 +224,6 @@ int checkSol(std::vector<IKSolution> solutions){
 
 /* Check center of mass stuff */
 
-static const int jointInd_robot2rave[20] = {17,14,18,15,19,16,//arms
-					    8,2,9,3,10,4,11,5,12,6,13,7,//legs
-					    0,1};//head
-
 bool COMinbounds(std::vector<IKReal> sol_l, std::vector<IKReal> sol_r,
 		 IKReal* bodytrans, IKReal* bodyrot, ForwardKinematics myKin){
   float maxX = .03;
@@ -237,8 +233,7 @@ bool COMinbounds(std::vector<IKReal> sol_l, std::vector<IKReal> sol_r,
   
 
   for (int i=0; i<(int)sol_l.size(); i++){
-    // 2i+8 is the index for the joints on the left foot. 2i+7 for the right
-    // TODO: clean this up to make it readable, NO MAGIC NUMBERS
+    // left leg indices are 2-7, right leg are 8-13
     myKin.setAngle(i+2, sol_l[i]); 
     myKin.setAngle(i+8, sol_r[i]);
   }  
@@ -247,7 +242,7 @@ bool COMinbounds(std::vector<IKReal> sol_l, std::vector<IKReal> sol_r,
   IKReal globalCOM[3] = {0,0,0};
   bodyCOM_vec = myKin.getCOM();
   float bodyCOM[3] = {bodyCOM_vec[0],bodyCOM_vec[1],bodyCOM_vec[2]};
-  IKReal bodytrans_from_foot[3]={bodytrans[0], bodytrans[1]+.3416, bodytrans[2]};
+  IKReal bodytrans_from_foot[3]={bodytrans[0], bodytrans[1]+.3081, bodytrans[2]};
   // bodytrans is the translation of the body relative to the body 
   // at 0 position, so we must adjust to have it centered at the foot
   applyTransform(bodytrans_from_foot, bodyrot, bodyCOM, globalCOM);
@@ -363,8 +358,8 @@ void dance(IKReal* trans, IKReal* Euler, Joystick* joy){
    IKReal oldEuler[3] = {0,0,0};
    IKReal oldtrans[3] = {0,0,0};
    IKReal eerot_l[9], eerot_r[9], bodyrot[9], eetrans_l[3], eetrans_r[3];
-   const IKReal transOffset_l[3] = {.037,-.3416,0};
-   const IKReal transOffset_r[3] = {-.037,-.3416,0};
+   const IKReal transOffset_l[3] = {.037,-.3081,0};
+   const IKReal transOffset_r[3] = {-.037,-.3081,0};
    IKReal* pfree = NULL;
    leftleg::IKSolver solver_l;
    rightleg::IKSolver solver_r;
