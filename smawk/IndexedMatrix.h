@@ -4,81 +4,59 @@
 #include "Index.h"
 #include <sstream>
 #include <iomanip>
-#include <assert.h>
 
-//#define IMAT_USE_PTR
 
 template <class Tmat>
 class IndexedMatrix_t {
 private:
 
   const Tmat& mat;
-#ifdef IMAT_USE_PTR
-  size_t* colset;
-  size_t ncols;
-#else
   IndexArray colset;
-#endif
   size_t lod;
+  size_t roffs;
+
+  static size_t getOffset(size_t l) { 
+    return (1<<l)-1;
+  }
 
 public:
 
   typedef typename Tmat::value_type value_type;
   
   IndexedMatrix_t(const Tmat& m, int l=0):
-    mat(m), lod(l) {
+    mat(m), lod(l), roffs(getOffset(l)) {
 
-#ifdef IMAT_USE_PTR
-    ncols = m.cols();
-    colset = new size_t[m.cols()];
-#else
     colset.resize(m.cols());
-#endif
-
     for (size_t i=0; i<m.cols(); ++i) { colset[i] = i; }
 
   }
 
-#ifdef IMAT_USE_PTR
-
-  IndexedMatrix_t(const IndexedMatrix_t<Tmat>& imat):
-    mat(imat.mat), lod(imat.lod)
-  {
-    ncols = imat.ncols;
-    colset = new size_t[imat.ncols];
-    for (size_t i=0; i<ncols; ++i) { colset[i] = imat.colset[i]; }
-  }
-
-  ~IndexedMatrix_t() { delete[] colset; }
-  
-  size_t cols() const { return ncols; }
-
-#else 
-
   size_t cols() const { return colset.size(); }
-
-#endif
 
   size_t rows() const { return mat.rows() >> lod; }
 
-  void decimateRows() { ++lod; }
+  void decimateRows() { roffs = getOffset(++lod); }
 
-  void restoreRows() { --lod; }
+  void restoreRows() { roffs = getOffset(--lod); }
 
   void makeSquare() { 
-#ifdef IMAT_USE_PTR
-    ncols = rows();
-#else
     colset.resize(rows()); 
-#endif
   }
 
   void replaceColumn(size_t j1, size_t j2) {
     colset[j1] = colset[j2];
   }
+  
+  size_t trueRowIndex(size_t i) const {
+    return (i<<lod) + roffs;
+  }
+
+  size_t trueColIndex(size_t j) const {
+    return colset[j];
+  }
 
   value_type operator()(size_t i, size_t j) const {
-    return mat( ((i+1)<<lod)-1, colset[j] );
+    return mat( (i<<lod) + roffs, colset[j] );
   }
 
 };

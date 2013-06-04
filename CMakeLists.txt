@@ -13,7 +13,10 @@ pkg_check_modules(CAIRO REQUIRED cairo)
 pkg_search_module(OPENCV REQUIRED opencv>=2.3 opencv-2.3.1)
 pkg_check_modules(SDL sdl)
 
+set(OPENCV_LIBRARIES ${OPENCV_LDFLAGS})
+
 if (APPLE)
+  link_directories(/opt/local/lib)
   find_library(OPENGL_LIBRARY OpenGL)
   find_library(GLUT_LIBRARY Glut)
   set(OPENGL_LIBRARIES ${OPENGL_LIBRARY} )

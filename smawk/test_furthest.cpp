@@ -236,6 +236,7 @@ enum {
   radius = 320,
   width = 750,
   height = 750,
+  scl = 32,
 };
 
 
@@ -264,8 +265,8 @@ int main(int argc, char** argv) {
     for (int i=0; i<npoints; ++i) {
 
       double angle = double(i)*2*M_PI/npoints;
-      int x = width/2 + radius * cos(-angle) + rng.gaussian(stddev);
-      int y = height/2 + radius * sin(-angle) + rng.gaussian(stddev);
+      int x = scl * (width/2 + radius * cos(-angle) + rng.gaussian(stddev));
+      int y = scl * (height/2 + radius * sin(-angle) + rng.gaussian(stddev));
       points.push_back( cv::Point(x,y) );
 
     }
@@ -277,39 +278,56 @@ int main(int argc, char** argv) {
     PointTriMat torig(cpoints);
     IndexedMatrix_t<PointTriMat> t(torig);
     
-    checkMonotone(t, cmp);
+    //checkMonotone(t, cmp);
 
     DebugMatrix_t<PointDistMat> dm(morig, 0);
     IndexedMatrix_t< DebugMatrix_t<PointDistMat> > m(dm);
 
 
-    IndexArray sopt_furthest, bopt_furthest, nopt_furthest, copt_furthest;
+    IndexArray sopt_furthest, bopt_furthest, nopt_furthest, 
+      copt_furthest, dopt_furthest;
 
     Timer stime;
     dm.count = 0;
-    smawk(m, cmp, sopt_furthest);
+    smawk(dm, cmp, sopt_furthest);
+    stime.stop();
     std::cout << "smawk finished in " << stime.elapsed() << " with " << dm.count << " evaluations.\n";
 
     Timer btime;
     dm.count = 0;
-    bruteForceSearch(m, cmp, bopt_furthest);
-    std::cout << "brute finished in " << btime.elapsed() << " with " << dm.count << " evaluations.\n";
+    ascendingSearch(dm, cmp, bopt_furthest);
+    btime.stop();
+    std::cout << "brute finished in " << btime.elapsed() << " with " << dm.count << " evaluations (" << 100*btime.elapsed() / stime.elapsed() << "%)\n";
+
+    Timer dtime;
+    dm.count = 0;
+    divideAndConquer(dm, cmp, dopt_furthest);
+    dtime.stop();
+    std::cout << "dandc finished in " << dtime.elapsed() << " with " << dm.count << " evaluations (" << 100*dtime.elapsed() / stime.elapsed() << "%)\n";
 
     Timer ntime;
     size_t ncount = naiveAllFurthest(cpoints, nopt_furthest);
-    std::cout << "naive finished in " << ntime.elapsed() << " with " << ncount << " evaluations.\n";
+    ntime.stop();
+    std::cout << "naive finished in " << ntime.elapsed() << " with " << ncount << " evaluations (" << 100*ntime.elapsed() / stime.elapsed() << "%)\n";
 
     Timer ctime;
     size_t ccount = cgalAllFurthest(cpoints, copt_furthest);
-    std::cout << "cgal  finished in " << ctime.elapsed() << " with " << ccount << " evaluations.\n";
-    
+    ctime.stop();
+    std::cout << "cgal  finished in " << ctime.elapsed() << " with " << ccount << " evaluations (" << 100*ctime.elapsed() / stime.elapsed() << "%)\n";
+
+
+    std::cout << "\n";
+
     assert(bopt_furthest.size() == sopt_furthest.size());
     assert(nopt_furthest.size() == sopt_furthest.size());
     assert(copt_furthest.size() == sopt_furthest.size());
+    assert(dopt_furthest.size() == sopt_furthest.size());
 
     for (size_t i=0; i<bopt_furthest.size(); ++i) {
 
       assert( morig(i, bopt_furthest[i]) == morig(i, sopt_furthest[i]) );
+
+      assert( morig(i, bopt_furthest[i]) == morig(i, dopt_furthest[i]) );
 
 
       assert( morig(i, sopt_furthest[i]) == 
@@ -330,23 +348,24 @@ int main(int argc, char** argv) {
 
     Mat3b image(width, height);
     image = cv::Vec3b(255,255,255);
+    double iscl = 1.0/scl;
     
     for (size_t i=0; i<cpoints.size(); ++i) {
       size_t ii = (i+1)%cpoints.size();
-      cv::line(image, cpoints[i], cpoints[ii], CV_RGB(0,0,255), 1, CV_AA);
+      cv::line(image, cpoints[i]*iscl, cpoints[ii]*iscl, CV_RGB(0,0,255), 1, CV_AA);
     }
 
     for (size_t i=0; i<cpoints.size(); ++i) {
       size_t ii = morig.indexOf(i,sopt_furthest[i]);
-      cv::line(image, cpoints[i], cpoints[ii], CV_RGB(255,0,255), 1, CV_AA);
+      cv::line(image, cpoints[i]*iscl, cpoints[ii]*iscl, CV_RGB(255,0,255), 1, CV_AA);
     }
 
     for (size_t i=0; i<cpoints.size(); ++i) {
-      cv::circle(image, cpoints[i], 3, CV_RGB(255,0,0), CV_FILLED, CV_AA);
+      cv::circle(image, cpoints[i]*iscl, 3, CV_RGB(255,0,0), CV_FILLED, CV_AA);
       std::ostringstream ostr;
       ostr << i;
       cv::putText(image, ostr.str(), 
-                  cpoints[i] + cv::Point(5, 5), 
+                  cpoints[i]*iscl + cv::Point(5, 5), 
                   cv::FONT_HERSHEY_SIMPLEX,
                   0.4, CV_RGB(64,0,0), 1, CV_AA);
     }

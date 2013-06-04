@@ -5,161 +5,197 @@
 #include "SmawkDebug.h"
 #include <assert.h>
 
-#define SMAWK_USE_PTR
 
 #ifdef SMAWK_DEBUG
-#define smawk_debug std::cout
+enum { smawk_verbose = 1 };
 #else
-#define smawk_debug if (0) std::cout
+enum { smawk_verbose = 0 };
 #endif
+
+#define smawk_debug if (smawk_verbose) std::cout
+
+#ifdef SMAWK_REDUCE_DEBUG
+enum { smawk_reduce_verbose = 1 };
+#else
+enum { smawk_reduce_verbose = 0 };
+#endif
+
+#define smawk_reduce_debug if (smawk_reduce_verbose) std::cout
+
 
 //////////////////////////////////////////////////////////////////////
 
+template <class Tmat, class Tcmp>
+inline void bruteForceSearch(const Tmat& m,
+                             Tcmp cmp,
+                             IndexArray& optima) {
+
+  typedef typename Tmat::value_type Tval;
+  
+  optima.resize(m.rows());
+
+  for (size_t i=0; i<m.rows(); ++i) {
+    optima[i] = 0;
+    Tval optval = m(i,0); 
+    for (size_t j=1; j<m.cols(); ++j) {
+      Tval val = m(i,j);
+      if (cmp(val, optval)) { 
+        optima[i] = j;
+        optval = val;
+      }
+    }
+  }
+
+}
+
+template <class Tmat, class Tcmp>
+inline void ascendingSearch(const Tmat& m,
+                            Tcmp cmp,
+                            IndexArray& optima) {
+
+  typedef typename Tmat::value_type Tval;
+  
+  optima.resize(m.rows());
+
+  size_t p = 0;
+
+  for (size_t i=0; i<m.rows(); ++i) {
+    Tval optval = m(i,p); 
+    for (size_t j=p+1; j<m.cols(); ++j) {
+      Tval val = m(i,j);
+      if (cmp(val, optval)) { 
+        p = j;
+        optval = val;
+      }
+    }
+    optima[i] = p;
+  }
+
+}
+
+//////////////////////////////////////////////////////////////////////
+
+template <class Tmat, class Tcmp>
+void divideAndConquer_r(const Tmat& m,
+                        Tcmp cmp,
+                        IndexArray& rowoptima,
+                        size_t i0, size_t i1,
+                        size_t j0, size_t j1) {
+
+  typedef typename Tmat::value_type Tval;
+
+  size_t i = i0 + (i1-i0)/2;
+
+  Tval optval = m(i, j0);
+  rowoptima[i] = j0;
+
+  for (size_t j=j0+1; j<j1; ++j) {
+    Tval val = m(i, j);
+    if (cmp(val, optval)) {
+      optval = val;
+      rowoptima[i] = j;
+    }
+  }
+
+  if (i > i0) {
+    divideAndConquer_r(m, cmp, rowoptima,
+                       i0, i,
+                       j0, rowoptima[i]+1);
+  } 
+
+  if (i1 > i+1) {
+    divideAndConquer_r(m, cmp, rowoptima,
+                       i+1, i1,
+                       rowoptima[i], j1);
+  }
+
+
+}
+
+template <class Tmat, class Tcmp>
+void divideAndConquer(const Tmat& m,
+                      Tcmp cmp,
+                      IndexArray& rowoptima) {
+
+  rowoptima.resize(m.rows());
+  divideAndConquer_r(m, cmp, rowoptima, 
+                     0, m.rows(), 0, m.cols());
+
+}
 
 template <class Tmat, class Tcmp>
 void reduce(IndexedMatrix_t<Tmat>& mat, 
             Tcmp cmp,
-#ifdef SMAWK_USE_PTR
             size_t* keptcols) {
-#else
-            IndexArray& keptcols) {
-#endif
-
-  typedef typename Tmat::value_type Tval;
-
 
   size_t n = mat.rows();
-
   size_t m = mat.cols();
-  size_t j2 = 0;
 
-#ifdef SMAWK_USE_PTR
-  size_t ss = 0;
-#else
-  keptcols.clear();
-#endif
+  size_t j1 = 0;
+  size_t j2 = 1;
+
+  keptcols[0] = 0;
 
   while (j2 < m) {
-
-#ifdef SMAWK_USE_PTR
-    if (ss == 0) { 
-#else
-    if (keptcols.empty()) {
-#endif
-
-#ifdef SMAWK_REDUCE_DEBUG
-      smawk_debug << "pushing C" << j2+1 << " onto empty stack.\n";
-#endif
-
-#ifdef SMAWK_USE_PTR
-      keptcols[ss++] = j2;
-#else
-      keptcols.push_back(j2);
-#endif
-      ++j2;
-
-    } 
-
-    bool defeated = false;
-
-#ifdef SMAWK_USE_PTR    
-    while (!defeated && ss && j2 < m) {
-#else
-    while (!defeated && !keptcols.empty() && j2 < m) {
-#endif
-
-#ifdef SMAWK_USE_PTR
-      size_t i = ss-1;
-#else
-      size_t i = keptcols.size()-1;
-#endif
-      size_t j1 = keptcols[i];
-
-#ifdef SMAWK_REDUCE_DEBUG
-
-      smawk_debug << "\n";
-
-      for (size_t ii=0; ii<n; ++ii) {
-        smawk_debug << "[ ";
-#ifdef SMAWK_USE_PTR
-        for (size_t j=0; j<ss; ++j) {
-#else
-        for (size_t j=0; j<keptcols.size(); ++j) {
-#endif
-          char c = (j == ii) ? '*' : ' ';
-          smawk_debug << c << std::setw(4) << mat(ii, keptcols[j]) << c << " ";
+    
+    if (smawk_reduce_verbose) {
+      for (size_t i=0; i<n; ++i) {
+        smawk_reduce_debug << "[ ";
+        for (size_t j=0; j<=j1; ++j) {
+          char c = (i == j1 && j == j1) ? '*' : ' ';
+          smawk_reduce_debug << c << std::setw(4) << mat(i, j) << c << " ";
         }
-        smawk_debug << " | ";
-        for (size_t j=j2; j<mat.cols(); ++j) {
-          smawk_debug << std::setw(4) << mat(ii, j) << " ";
+        smawk_reduce_debug << " | ";
+        for (size_t j=j2; j<m; ++j) {
+          smawk_reduce_debug << std::setw(4) << mat(i, j) << " ";
         }
-        smawk_debug << "]\n";
+        smawk_reduce_debug << "]\n";
       }
-
-      smawk_debug << "we are at row " << i+1 << "\n";
-      smawk_debug << "C" << j2+1 << " with value " << mat(i,j2) << " challenges C" << j1+1 << " with value " << mat(i,j1) << "\n";
-
-#endif
+      smawk_reduce_debug << "C" << j2+1 << " with value " << mat(j1,j2) << " challenges C" << keptcols[j1]+1 << " with value " << mat(j1,j1) << "\n";
+    }
 
 
-      if ( cmp( mat(i,j1), mat(i,j2) ) ) {
+    if ( cmp( mat(j1, j1), mat(j1, j2)) ) {
 
-#ifdef SMAWK_REDUCE_DEBUG          
-        smawk_debug << "C" << j2+1 << " is defeated";
-#endif
-        defeated = true;
+      smawk_reduce_debug << "C" << j2+1 << " is defeated";
 
-        if (i == n-1) {
-#ifdef SMAWK_REDUCE_DEBUG          
-          smawk_debug << " and eliminated.\n";
-#endif
-          ++j2;
-        } else {
-#ifdef SMAWK_REDUCE_DEBUG
-          smawk_debug << " but survives.\n";
-#endif
-#ifdef SMAWK_USE_PTR
-          keptcols[ss++] = j2;
-#else
-          keptcols.push_back(j2);
-#endif
-          ++j2;
-        }
+      if (j1 == n-1) {
+        smawk_reduce_debug << " and eliminated.\n";
+        ++j2;
+      } else {
+        smawk_reduce_debug << " but survives.\n";
+        mat.replaceColumn(++j1, j2);
+        keptcols[j1] = j2++;
+      }
+        
+    } else {
 
-#ifdef SMAWK_REDUCE_DEBUG
-        smawk_debug << "\n";
-#endif
+      smawk_reduce_debug << "C" << keptcols[j1]+1 << " is eliminated\n";
+
+      if (j1) {
+
+        smawk_reduce_debug << "popping stack\n";
+        --j1;
 
       } else {
 
-#ifdef SMAWK_REDUCE_DEBUG
-        smawk_debug << "C" << j1+1 << " is eliminated.\n";
-#endif
+        smawk_reduce_debug << "placing C" << j1+1 << " onto emtpy stack.\n";
 
-#ifdef SMAWK_USE_PTR        
-        --ss;
-#else
-        keptcols.pop_back();
-#endif
-          
+        mat.replaceColumn(j1,j2);
+        keptcols[j1] = j2++;
+
       }
 
     }
 
-      
   }
 
-#ifdef SMAWK_USE_PTR        
-  assert(ss == n);
-#else
-  assert(keptcols.size() == n);
-#endif
-
-  for (size_t i=0; i<n; ++i) {
-    mat.replaceColumn(i, keptcols[i]);
+  if (smawk_reduce_verbose) {
+    assert(j1 == n-1);
   }
 
   mat.makeSquare();
+
 
 }
 
@@ -170,8 +206,7 @@ void reduce(IndexedMatrix_t<Tmat>& mat,
 template <class Tmat, class Tcmp>
 void smawk_r(IndexedMatrix_t<Tmat>& wmat,
              Tcmp cmp,
-             IndexArray& rowoptima,
-             IndexArray& work) {
+             IndexArray& rowoptima) {
 
 #ifdef SMAWK_DEBUG
   smawk_debug << "at top:\n";
@@ -181,21 +216,15 @@ void smawk_r(IndexedMatrix_t<Tmat>& wmat,
   typedef typename Tmat::value_type Tval;
 
   size_t orig_cols = wmat.cols();
+  size_t orig_rows = wmat.rows();
 
   IndexedMatrix_t<Tmat> mat(wmat);
   
-
-#ifdef SMAWK_USE_PTR
   size_t* keptcols = 0;
-#else
-  IndexArray keptcols;
-#endif
 
-  if (orig_cols > mat.rows()) {
+  if (orig_cols > orig_rows) {
 
-#ifdef SMAWK_USE_PTR
-    keptcols = new size_t[mat.rows()];
-#endif
+    keptcols = new size_t[orig_rows];
 
     reduce(mat, cmp, keptcols);
 
@@ -206,49 +235,50 @@ void smawk_r(IndexedMatrix_t<Tmat>& wmat,
 
   }
 
-  if (mat.rows() == 1) {
+  if (orig_rows == 1) {
 
-    rowoptima.clear();
-    rowoptima.push_back(0);
+    rowoptima = IndexArray(1, 0);
+
+  } else if (0) {
+
+    //divideAndConquer(mat, cmp, rowoptima);
+    //bruteForceSearch(mat, cmp, rowoptima);
+    //ascendingSearch(mat, cmp, rowoptima);
 
   } else {
 
-    size_t orig_rows = mat.rows();
-
     mat.decimateRows();           
 
-    size_t new_rows = mat.rows();
-
-    smawk_r(mat, cmp, rowoptima, work);
-
-    rowoptima.swap(work);
+    smawk_r(mat, cmp, rowoptima);
 
     mat.restoreRows();
     rowoptima.resize(orig_rows);
 
-    for (size_t i=0; i<orig_rows; ++i) {
+    for (size_t i=orig_rows-1; i<orig_rows; --i) {
 
       if (i % 2) {
 
-        rowoptima[i] = work[i/2];
+        rowoptima[i] = rowoptima[i/2];
 
       } else {
 
         size_t i0 = i/2-1;
-        size_t i1 = i/2;
-        size_t j0 = (i0 < new_rows) ? work[i0] : 0;
-        size_t j1 = (i1 < new_rows) ? work[i1]+1 : mat.cols();
+        size_t i1 = i+1;
+        size_t j0 = (i0 < orig_rows/2) ? rowoptima[i0] : 0;
+        size_t j1 = (i1 < orig_rows) ? rowoptima[i1]+1 : mat.cols();
 
-        rowoptima[i] = j0;
-        Tval optval = mat( i, j0 );
+        size_t optidx = j0;
+        Tval optval = mat(i, j0);
 
         for (size_t j=j0+1; j<j1; ++j) {
-          Tval val = mat( i, j );
-          if (cmp(val, optval)) { 
-            rowoptima[i] = j;
+          Tval val = mat(i, j);
+          if (cmp(val, optval)) {
+            optidx = j;
             optval = val;
           }
         }
+
+        rowoptima[i] = optidx;
 
       }
 
@@ -265,16 +295,13 @@ void smawk_r(IndexedMatrix_t<Tmat>& wmat,
   assert(rowoptima.size() == mat.rows());
 #endif
 
-  if (orig_cols > mat.cols()) {
+  if (keptcols) {
     
-    for (size_t i=0; i<rowoptima.size(); ++i) {
-      smawk_debug << "in row " << i+1 << " moving col " << rowoptima[i]+1 << " to " << keptcols[rowoptima[i]]+1 << "\n";
+    for (size_t i=0; i<mat.cols(); ++i) {
       rowoptima[i] = keptcols[rowoptima[i]];
     }
 
-#ifdef SMAWK_USE_PTR
     delete[] keptcols;
-#endif
 
 #ifdef SMAWK_DEBUG
     smawk_debug << "after columns restored:\n";
@@ -293,11 +320,10 @@ void smawk(const Tmat& m,
 
   IndexedMatrix_t<Tmat> mat(m);
   
-  IndexArray work;
-
-  smawk_r(mat, cmp, rowoptima, work);
+  smawk_r(mat, cmp, rowoptima);
 
 }
+
 
 
 

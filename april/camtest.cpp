@@ -3,44 +3,149 @@
 #include <sys/time.h>
 #include <iostream>
 
-#include <gflags/gflags.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "CameraUtil.h"
 
-DEFINE_int32(device_num, 0,
-             "Device number for video device to parse for tag information.");
-DEFINE_double(focal_length, 500,
-              "Focal length of the camera represented by the video device.");
-DEFINE_string(tag_family, "Tag36h11",
-              "Tag family to use for detections.");
-DEFINE_double(tag_size, 0.1905,
-              "Tag size in meters of the tags to detect.");
-DEFINE_int32(frame_width, 640, "Desired video frame width.");
-DEFINE_int32(frame_height, 480, "Desired video frame height.");
-DEFINE_bool(decimate, false, "Set to use decimation for tag detection.");
-DEFINE_bool(mirror_display, false,
-            "Whether to flip display window image horizontally.");
+#define DEFAULT_TAG_FAMILY "Tag36h11"
 
-int main(int argc, char** argv) {
-  std::string usage;
-  usage += std::string("Usage: ") + argv[0] + std::string(" [OPTIONS]\n");
-  usage += std::string("Known tag families:");
+typedef struct TagTestOptions {
+  TagTestOptions() :
+      params(),
+      family_str(DEFAULT_TAG_FAMILY),
+      error_fraction(1),
+      device_num(0),
+      focal_length(500),
+      tag_size(0.1905),
+      frame_width(0),
+      frame_height(0),
+      mirror_display(true)
+  {
+  }
+  TagDetectorParams params;
+  std::string family_str;
+  double error_fraction;
+  int device_num;
+  double focal_length;
+  double tag_size;
+  int frame_width;
+  int frame_height;
+  bool mirror_display;
+} TagTestOptions;
+
+
+void print_usage(const char* tool_name, FILE* output=stderr) {
+
+  TagDetectorParams p;
+  TagTestOptions o;
+
+  fprintf(output, "\
+Usage: %s [OPTIONS]\n\
+Run a tool to test tag detection. Options:\n\
+ -h              Show this help message.\n\
+ -D              Use decimation for segmentation stage.\n\
+ -S SIGMA        Set the original image sigma value (default %.2f).\n\
+ -s SEGSIGMA     Set the segmentation sigma value (default %.2f).\n\
+ -a THETATHRESH  Set the theta threshold for clustering (default %.1f).\n\
+ -m MAGTHRESH    Set the magnitude threshold for clustering (default %.1f).\n\
+ -V VALUE        Set adaptive threshold value for new quad algo (default %f).\n\
+ -N RADIUS       Set adaptive threshold radius for new quad algo (default %d).\n\
+ -b              Refine bad quads using template tracker.\n\
+ -r              Refine all quads using template tracker.\n\
+ -n              Use the new quad detection algorithm.\n\
+ -f FAMILY       Look for the given tag family (default \"%s\")\n\
+ -e FRACTION     Set error detection fraction (default %f)\n\
+ -d DEVICE       Set camera device number (default %d)\n\
+ -F FLENGTH      Set the camera's focal length in pixels (default %f)\n\
+ -z SIZE         Set the tag size in meters (default %f)\n\
+ -W WIDTH        Set the camera image width in pixels\n\
+ -H HEIGHT       Set the camera image height in pixels\n\
+ -M              Toggle display mirroring\n",
+          tool_name,
+          p.sigma,
+          p.segSigma,
+          p.thetaThresh,
+          p.magThresh,
+          p.adaptiveThresholdValue,
+          p.adaptiveThresholdRadius,
+          DEFAULT_TAG_FAMILY,
+          o.error_fraction,
+          o.device_num,
+          o.focal_length,
+          o.tag_size);
+
+
+  fprintf(output, "Known tag families:");
   TagFamily::StringArray known = TagFamily::families();
   for (size_t i = 0; i < known.size(); ++i) {
-    usage += std::string(" ") + known[i];
+    fprintf(output, " %s", known[i].c_str());
   }
-  gflags::SetUsageMessage(usage);
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  fprintf(output, "\n");
+}
+
+TagTestOptions parse_options(int argc, char** argv) {
+  TagTestOptions opts;
+  const char* options_str = "hDS:s:a:m:V:N:brnf:e:d:F:z:W:H:M";
+  int c;
+  while ((c = getopt(argc, argv, options_str)) != -1) {
+    switch (c) {
+      // Reminder: add new options to 'options_str' above and print_usage()!
+      case 'h': print_usage(argv[0], stdout); exit(0); break;
+      case 'D': opts.params.segDecimate = true; break;
+      case 'S': opts.params.sigma = atof(optarg); break;
+      case 's': opts.params.segSigma = atof(optarg); break;
+      case 'a': opts.params.thetaThresh = atof(optarg); break;
+      case 'm': opts.params.magThresh = atof(optarg); break;
+      case 'V': opts.params.adaptiveThresholdValue = atof(optarg); break;
+      case 'N': opts.params.adaptiveThresholdRadius = atoi(optarg); break;
+      case 'b': opts.params.refineBad = true; break;
+      case 'r': opts.params.refineQuads = true; break;
+      case 'n': opts.params.newQuadAlgorithm = true; break;
+      case 'f': opts.family_str = optarg; break;
+      case 'e': opts.error_fraction = atof(optarg); break;
+      case 'd': opts.device_num = atoi(optarg); break;
+      case 'F': opts.focal_length = atof(optarg); break;
+      case 'z': opts.tag_size = atof(optarg); break;
+      case 'W': opts.frame_width = atoi(optarg); break;
+      case 'H': opts.frame_height = atoi(optarg); break;
+      case 'M': opts.mirror_display = !opts.mirror_display; break;
+      default:
+        fprintf(stderr, "\n");
+        print_usage(argv[0], stderr);
+        exit(1);
+    }
+  }
+  opts.params.adaptiveThresholdRadius += (opts.params.adaptiveThresholdRadius+1) % 2;
+  return opts;
+}
+
+int main(int argc, char** argv) {
+
+  TagTestOptions opts = parse_options(argc, argv);
+
+  TagFamily family(opts.family_str);
+
+  if (opts.error_fraction >= 0 && opts.error_fraction <= 1) {
+    family.setErrorRecoveryFraction(opts.error_fraction);
+  }
+
+  std::cout << "family.minimumHammingDistance = " << family.minimumHammingDistance << "\n";
+  std::cout << "family.errorRecoveryBits = " << family.errorRecoveryBits << "\n";
+  
 
   cv::VideoCapture vc;
-  vc.open(FLAGS_device_num);
+  vc.open(opts.device_num);
 
-  // Use uvcdynctrl to figure this out dynamically at some point?
-  vc.set(CV_CAP_PROP_FRAME_WIDTH, FLAGS_frame_width);
-  vc.set(CV_CAP_PROP_FRAME_HEIGHT, FLAGS_frame_height);
+  if (opts.frame_width && opts.frame_height) {
+
+    // Use uvcdynctrl to figure this out dynamically at some point?
+    vc.set(CV_CAP_PROP_FRAME_WIDTH, opts.frame_width);
+    vc.set(CV_CAP_PROP_FRAME_HEIGHT, opts.frame_height);
+    
+
+  }
 
   std::cout << "Set camera to resolution: "
             << vc.get(CV_CAP_PROP_FRAME_WIDTH) << "x"
@@ -60,12 +165,7 @@ int main(int argc, char** argv) {
 
   std::string win = "Cam tag test";
 
-  TagFamily family(FLAGS_tag_family);
-  TagDetectorParams params;
-  if (FLAGS_decimate) {
-    params.segDecimate = true;
-    std::cout << "will decimate for segmentation!\n";
-  }
+  TagDetectorParams& params = opts.params;
   TagDetector detector(family, params);
   
   TagDetectionArray detections;
@@ -89,7 +189,7 @@ int main(int argc, char** argv) {
       //show = family.superimposeDetections(frame, detections);
       show = frame;
 
-      double s = FLAGS_tag_size;
+      double s = opts.tag_size;
       double ss = 0.5*s;
       double sz = s;
 
@@ -127,7 +227,7 @@ int main(int argc, char** argv) {
 
       cv::Point2d dst[npoints];
 
-      double f = FLAGS_focal_length;
+      double f = opts.focal_length;
 
       double K[9] = {
         f, 0, opticalCenter.x,
@@ -188,7 +288,7 @@ int main(int argc, char** argv) {
 
     }
 
-    if (FLAGS_mirror_display) {
+    if (opts.mirror_display) {
       cv::flip(show, show, 1);
     }
 

@@ -3,7 +3,7 @@
 #include <sstream>
 #include <stdlib.h>
 
-
+namespace {
 
 /** Tag family with 30 distinct codes.
     bits: 16,  minimum hamming: 5,  minimum complexity: 5
@@ -1514,6 +1514,8 @@ static const TagInfoArray& getFamilies() {
   }
 
   return rval;
+
+}
 
 }
 

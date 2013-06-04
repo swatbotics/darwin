@@ -1,5 +1,6 @@
 
 //#define SMAWK_DEBUG
+//#define SMAWK_REDUCE_DEBUG
 
 #include "Smawk.h"
 #include "SimpleMatrix.h"
@@ -136,33 +137,45 @@ int main(int argc, char** argv) {
   if (random) {
     Timer ctime;
     fillRandomMatrix(morig, 20);
+    ctime.stop();
     std::cout << "construction took " << ctime.elapsed() << " sec.\n\n";
   }
 
   DebugIntMatrix dm(morig, delay);
 
-  IndexArray bopt, sopt;
+  IndexArray bopt, sopt, dopt;
 
+  dm.count = 0;
   Timer btime;
-  dm.count = 0;
   bruteForceSearch(dm, cmp, bopt);
+  btime.stop();
   std::cout << "brute ran " <<  dm.count 
-            << " exaoptations total in " << btime.elapsed() << " seconds.\n\n";
+            << " evaluations total in " << btime.elapsed() << " seconds.\n\n";
 
-  Timer stime;
 
   dm.count = 0;
+  Timer stime;
   smawk(dm, cmp, sopt);
+  stime.stop();
   std::cout << "smawk ran " << dm.count
             << " evaluations total in " << stime.elapsed() << " seconds.\n\n";
+
+  dm.count = 0;
+  Timer dtime;
+  divideAndConquer(dm, cmp, dopt);
+  dtime.stop();
+  std::cout << "dandc ran " << dm.count
+            << " evaluations total in " << dtime.elapsed() << "seconds.\n\n";
 
   if (cols <= test_cols) {
     debugPrintMatrixAndOptima(morig, cmp, sopt);
   }
   
   assert(bopt.size() == sopt.size());
+  assert(dopt.size() == sopt.size());
   for (size_t i=0; i<bopt.size(); ++i) {
     assert(morig(i,bopt[i]) == morig(i,sopt[i]));
+    assert(morig(i,bopt[i]) == morig(i,dopt[i]));
   }
 
   return 0;

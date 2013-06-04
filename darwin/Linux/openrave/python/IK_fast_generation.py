@@ -1,7 +1,7 @@
 from openravepy import *
 from openravepy import ikfast
 env = Environment()
-kinbody = env.ReadRobotXMLFile('robots/romela-darwin-op.dae')
+kinbody = env.ReadRobotXMLFile('xml/romela-darwin-op.dae')
 env.AddRobot(kinbody)
 solver = ikfast.IKFastSolver(kinbody=kinbody)
 manip = kinbody.SetActiveManipulator(2)

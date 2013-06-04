@@ -16,6 +16,8 @@ link_directories(${OPENCV_LIBRARY_DIRS})
 
 include_directories(${GFLAGS_INCLUDE_DIRS})
 
+message("opencv libs ${OPENCV_LIBRARIES}")
+
 set(AT_LIBS apriltagcpp ${OPENCV_LIBRARIES} cgal)
 
 
@@ -53,6 +55,9 @@ target_link_libraries(calibrate ${AT_LIBS} gflags)
 
 add_executable(maketags maketags.cpp)
 target_link_libraries(maketags ${CAIRO_LIBRARIES} ${AT_LIBS})
+
+add_executable(bundler bundler.cpp)
+target_link_libraries(bundler ${AT_LIBS})
 
 if (GLUT_LIBRARY)
 add_executable(gltest gltest.cpp)

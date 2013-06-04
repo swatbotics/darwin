@@ -13,13 +13,16 @@ struct Unit {
   double points;
 };
 
-static const Unit units[] = {
+enum {
+  num_units = 5
+};
+
+static const Unit units[num_units] = {
   { "pt", 1 },
   { "in", 72 },
   { "ft", 72*12 },
   { "cm", 28.346456693 },
   { "mm", 2.8346456693 },
-  { "", 0 }
 };
 
 
@@ -52,7 +55,7 @@ double parse_unit(std::istream& istr) {
     std::string label;
     istr >> label;
     bool found = false;
-    for (int i=0; units[i].points; ++i) {
+    for (int i=0; i<num_units; ++i) {
       if (units[i].name == label) {
         found = true;
         rval *= units[i].points;
@@ -105,8 +108,12 @@ void usage(std::ostream& ostr) {
        << "   --tagfrac N                generate N tags per paper width (set tag size automatically)\n"
        << "   --padding LENGTH           set padding between tags\n"
        << "   --id N                     generate only tag with id N (mutliple allowed)\n"
-       << "   --maxid N                  generate only tags with id's less than N\n"
+       << "   --idrange N1 N2            generate only tags with id's between N1 and N2 (inclusive)\n"
        << "   --label                    add labels\n"
+       << "   --labelsize LENGTH         label font size\n"
+       << "   --labelgray G              label darkness (0-1)\n"
+       << "   --labelfmt FMT             label format %d=id, %f=family, %i=innersize %t=tagsize\n"
+       << "   --cropmark X Y L G         emit cropmarks at (X,Y) from edge with length L and gray G\n"
        << "   --help                     see this message\n"
        << "\n";
 
@@ -132,6 +139,16 @@ int main(int argc, char** argv) {
   double tagfrac = 1;
   double padding = 0;
   double margins[4] = { 36, 36, 36, 36 }; // 0.5in margins all around
+  double font_size = 0;
+  double label_gray = 0;
+  double crop_x = 0;
+  double crop_y = 0;
+  double crop_l = 36;
+  double crop_w = 1;
+  double crop_gray = 0.8;
+  bool   do_crop = false;
+
+  std::string label_fmt = "%d";
 
   bool draw_labels = false;
 
@@ -175,12 +192,24 @@ int main(int argc, char** argv) {
       for (int i=0; i<4; ++i) { margins[i] = parse_unit(argv[++i]); }
     } else if (optarg == "--label") {
       draw_labels = true;
+    } else if (optarg == "--labelsize") {
+      font_size = parse_unit(argv[++i]);
+    } else if (optarg == "--labelgray") {
+      label_gray = parse_value<double>(argv[++i]);
+    } else if (optarg == "--labelfmt") {
+      label_fmt = argv[++i];
     } else if (optarg == "--tagsize") {
       size = parse_unit(argv[++i]);
       stype = SizeFull;
     } else if (optarg == "--innersize") {
       size = parse_unit(argv[++i]);
       stype = SizeInner;
+    } else if (optarg == "--cropmark") {
+      do_crop = true;
+      crop_x = parse_unit(argv[++i]);
+      crop_y = parse_unit(argv[++i]);
+      crop_l = parse_unit(argv[++i]);
+      crop_gray = parse_value<double>(argv[++i]);
     } else if (optarg == "--padding") {
       padding = parse_unit(argv[++i]);
     } else if (optarg == "--tagfrac") {
@@ -192,9 +221,10 @@ int main(int argc, char** argv) {
       }
     } else if (optarg == "--id") {
       ids.push_back(parse_value<size_t>(argv[++i]));
-    } else if (optarg == "--maxid") {
-      size_t maxid = parse_value<size_t>(argv[++i]);
-      for (size_t i=0; i<maxid; ++i) {
+    } else if (optarg == "--idrange") {
+      size_t start = parse_value<size_t>(argv[++i]);
+      size_t end = parse_value<size_t>(argv[++i]);
+      for (size_t i=start; i<=end; ++i) {
         ids.push_back(i);
       }
     } else if (optarg == "--help") {
@@ -248,7 +278,10 @@ int main(int argc, char** argv) {
   double px_size = size / rd;
 
   double row_size = size;
-  double font_size = px_size;
+
+  if (font_size == 0) {
+    font_size = px_size;
+  }
 
   if (draw_labels) {
     row_size += font_size;
@@ -316,7 +349,6 @@ int main(int argc, char** argv) {
   surface = cairo_pdf_surface_create("pdffile.pdf", orig_width, orig_height);
   cr = cairo_create(surface);
 
-  cairo_set_line_width(cr, px_size / 32);
 
   cairo_select_font_face (cr, "Sans", CAIRO_FONT_SLANT_NORMAL,
                           CAIRO_FONT_WEIGHT_NORMAL);
@@ -343,7 +375,52 @@ int main(int argc, char** argv) {
 
     double x = mw + wb * px_size + col * (size + padding);
     double y = mh + wb * px_size + row * (row_size + padding);
-    
+
+    if (do_crop) {
+
+      cairo_set_line_width(cr, crop_w);
+
+      cairo_set_source_rgb(cr, 
+                           crop_gray,
+                           crop_gray,
+                           crop_gray);
+
+      cairo_new_path(cr);
+
+      double x0 = mw + col * (size + padding);
+      double y0 = mh + row * (row_size + padding);
+      double x1 = x0 + size;
+      double y1 = y0 + size;
+
+      cairo_move_to(cr, x0-crop_x, y0-crop_y);
+      cairo_line_to(cr, x0-crop_x-crop_l, y0-crop_y);
+
+      cairo_move_to(cr, x0-crop_x, y0-crop_y);
+      cairo_line_to(cr, x0-crop_x, y0-crop_y-crop_l);
+
+      cairo_move_to(cr, x1+crop_x, y0-crop_y);
+      cairo_line_to(cr, x1+crop_x+crop_l, y0-crop_y);
+
+      cairo_move_to(cr, x1+crop_x, y0-crop_y);
+      cairo_line_to(cr, x1+crop_x, y0-crop_y-crop_l);
+
+      cairo_move_to(cr, x0-crop_x, y1+crop_y);
+      cairo_line_to(cr, x0-crop_x-crop_l, y1+crop_y);
+
+      cairo_move_to(cr, x0-crop_x, y1+crop_y);
+      cairo_line_to(cr, x0-crop_x, y1+crop_y+crop_l);
+
+      cairo_move_to(cr, x1+crop_x, y1+crop_y);
+      cairo_line_to(cr, x1+crop_x+crop_l, y1+crop_y);
+
+      cairo_move_to(cr, x1+crop_x, y1+crop_y);
+      cairo_line_to(cr, x1+crop_x, y1+crop_y+crop_l);
+      
+      cairo_stroke(cr);
+
+    }
+
+
     // draw thing at x, y
     cairo_set_source_rgb(cr, 0, 0, 0);
     cairo_new_path(cr);
@@ -352,15 +429,74 @@ int main(int argc, char** argv) {
 
     if (draw_labels) {
 
-      char buf[1024];
-      snprintf(buf, 1024, "%u", (unsigned int)ids[i]);
+      cairo_set_source_rgb(cr, 
+                           label_gray, 
+                           label_gray, 
+                           label_gray);
+
+      //char buf[1024];
+      //snprintf(buf, 1024, "%u", (unsigned int)ids[i]);
+      int id = ids[i];
+      std::string lstr = label_fmt;
+
+      // replace %[0-9]+d with buf
+      // replace %f with stuff
+      size_t pos;
+      size_t start = 0;
+      while ( (pos = lstr.find('%', start)) != std::string::npos ) {
+
+        size_t pos2 = pos+1;
+        while (pos2 < lstr.length() && isdigit(lstr[pos2])) {
+          ++pos2;
+        }
+
+        if (pos2 >= lstr.length()) { break; }
+
+        size_t l = pos2-pos + 1;
+
+        char buf[1024];
+        
+        if (tolower(lstr[pos2]) == 'f') {
+          lstr.replace(pos, l, argv[1]);
+        } else if (tolower(lstr[pos2]) == 'i' ||
+                   tolower(lstr[pos2]) == 't' ||
+                   tolower(lstr[pos2]) == 'p') {
+          double meas;
+          switch (tolower(lstr[pos2])) {  
+          case 'i':
+            meas = sq_size;
+            break;
+          case 't':
+            meas = size;
+            break;
+          default:
+            meas = px_size;
+            break;
+          }
+          int u = lstr[pos2-1] - '0';
+          if (u < 0 || u >= num_units) { u = 0; }
+          meas /= units[u].points;
+          snprintf(buf, 1024, "%g %s", meas, units[u].name.c_str());
+          lstr.replace(pos, l, buf);
+        } else if (tolower(lstr[pos2]) == 'd') {
+          snprintf(buf, 1024, lstr.substr(pos,l).c_str(), id);
+          lstr.replace(pos, l, buf);
+        }
+
+        start = pos2;
+
+      }
+      
+      
+
+      
 
       cairo_text_extents_t extents;
-      cairo_text_extents (cr, buf, &extents);
+      cairo_text_extents (cr, lstr.c_str(), &extents);
 
       double tx = 0.5 * (sq_size - extents.width);
       cairo_move_to(cr, x + tx, y + sq_size + px_size * wb + font_size);
-      cairo_show_text(cr, buf);
+      cairo_show_text(cr, lstr.c_str());
 
     }
 
@@ -377,6 +513,7 @@ int main(int argc, char** argv) {
       for (int j=0; j<family.d; ++j) {
         bool w = m(i+tb,j+tb);
         if (w) {
+          cairo_set_line_width(cr, px_size / 256);
           cairo_new_path(cr);
           cairo_rectangle(cr, x+(j+bb)*px_size, y+(i+bb)*px_size, px_size, px_size);
           //cairo_save(cr);

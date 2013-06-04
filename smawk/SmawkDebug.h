@@ -64,14 +64,31 @@ inline void debugPrintMatrix(const Tmat& mat,
 }
 
 template <class Tmat, class Tcmp>
+inline void debugPrintMatrixAndOptima(const IndexedMatrix_t<Tmat>& mat, 
+                                      Tcmp cmp,
+                                      const IndexArray& optima) {
+
+  debugPrintMatrix(mat, cmp);
+
+  for (size_t i=0; i<mat.rows(); ++i) {
+    size_t t = mat.trueRowIndex(i);
+    std::cout << "optimum of row " << i+1 << " is at column " << optima[t]+1 << " with value " << mat(i, optima[t]) << "\n";
+    for (size_t j=0; j<mat.cols(); ++j) {
+      assert( !cmp(mat(i, j), mat(i, optima[t])) );
+    }
+  }
+  std::cout << "\n";
+
+}
+
+template <class Tmat, class Tcmp>
 inline void debugPrintMatrixAndOptima(const Tmat& mat, 
                                       Tcmp cmp,
                                       const IndexArray& optima) {
 
   debugPrintMatrix(mat, cmp);
 
-  assert(optima.size() == mat.rows());
-  for (size_t i=0; i<optima.size(); ++i) {
+  for (size_t i=0; i<mat.rows(); ++i) {
     std::cout << "optimum of row " << i+1 << " is at column " << optima[i]+1 << " with value " << mat(i, optima[i]) << "\n";
     for (size_t j=0; j<mat.cols(); ++j) {
       assert( !cmp(mat(i, j), mat(i, optima[i])) );
@@ -83,32 +100,10 @@ inline void debugPrintMatrixAndOptima(const Tmat& mat,
 
 //////////////////////////////////////////////////////////////////////
 
-template <class Tmat, class Tcmp>
-inline void bruteForceSearch(const Tmat& m,
-                             Tcmp cmp,
-                             IndexArray& optima) {
-  
-  optima.resize(m.rows());
-
-  for (size_t i=0; i<m.rows(); ++i) {
-    optima[i] = 0;
-    int optval = m(i,0); 
-    for (size_t j=1; j<m.cols(); ++j) {
-      int val = m(i,j);
-      if (cmp(val, optval)) { 
-        optima[i] = j;
-        optval = val;
-      }
-    }
-  }
-
-}
-
-//////////////////////////////////////////////////////////////////////
-
 class Timer {
 private:
   double _start;
+  double _end;
 
 public:
 
@@ -118,10 +113,18 @@ public:
     return tp.tv_sec * 1.0 + tp.tv_usec * 1e-6;
   }
 
-  Timer(): _start(getTimeAsDouble()) {}
+  Timer() { start(); }
+
+  void start() {
+    _start = getTimeAsDouble();
+  }
+  
+  void stop() {
+    _end = getTimeAsDouble();
+  }
 
   double elapsed() const {
-    return getTimeAsDouble() - _start;
+    return _end - _start;
   }
 
 };
