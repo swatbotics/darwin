@@ -11,7 +11,7 @@ include(FindPkgConfig)
 
 #pkg_check_modules(CAIRO REQUIRED cairo)
 #pkg_search_module(OPENCV REQUIRED opencv>=2.3 opencv-2.3.1)
-#pkg_check_modules(SDL sdl)
+pkg_check_modules(SDL sdl)
 
 set(OPENCV_LIBRARIES ${OPENCV_LDFLAGS})
 
