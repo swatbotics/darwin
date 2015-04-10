@@ -5,4 +5,3 @@ add_subdirectory(tutorial)
 add_subdirectory(dxl_monitor)
 
 
-add_subdirectory(april_tags)
