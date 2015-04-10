@@ -5,13 +5,13 @@ cmake_minimum_required(VERSION 2.8)
 # This allows else(), endif(), etc... (without repeating the expression)
 set(CMAKE_ALLOW_LOOSE_LOOP_CONSTRUCTS true)
 
-project(swatbotics)
+project(swatbotics-darwin)
 
 include(FindPkgConfig)
 
-pkg_check_modules(CAIRO REQUIRED cairo)
-pkg_search_module(OPENCV REQUIRED opencv>=2.3 opencv-2.3.1)
-pkg_check_modules(SDL sdl)
+#pkg_check_modules(CAIRO REQUIRED cairo)
+#pkg_search_module(OPENCV REQUIRED opencv>=2.3 opencv-2.3.1)
+#pkg_check_modules(SDL sdl)
 
 set(OPENCV_LIBRARIES ${OPENCV_LDFLAGS})
 
@@ -45,10 +45,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 
 # Put in order so that april and darwin code can link against gflags, and
 # so darwin code can link against the april library.
-add_subdirectory(gflags)
-add_subdirectory(libconfig)
-add_subdirectory(smawk)
-add_subdirectory(april)
 add_subdirectory(darwin)
 
 if (NOT APPLE)
