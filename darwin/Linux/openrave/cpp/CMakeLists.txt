@@ -19,6 +19,7 @@ add_subdirectory(forwardKin)
 add_subdirectory(Jacobians)
 add_subdirectory(diff_kin)
 add_subdirectory(zero_finding)
+add_subdirectory(playback)
 endif (${SDL_FOUND})
 
 
