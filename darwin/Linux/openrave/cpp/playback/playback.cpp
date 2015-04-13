@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <assert.h>
 
 #include "Body.h"
 #include "Camera.h"
@@ -137,22 +138,19 @@ int main(int argc, char** argv)
   // convert delta t from trajectory to microseconds
   size_t dt_usec = size_t(traj.dt * 1e6);
 
-  size_t tick = 0;
+  // the offset of the current tick within trajectory data
+  size_t offset = 0;
 
-  while(1) {
+  assert( traj.angles_rad.size() == traj.nticks * NUM_JOINTS );
 
-    // the offset of the current tick within trajectory data
-    size_t offset = tick * NUM_JOINTS;
+  // loop over trajectory
+  for (size_t t=0; t<traj.nticks; ++t) {
 
     // put trajectory data into motors
     for (int i=0; i<NUM_JOINTS; ++i) {
       // note motor indices start at 1, so need to add i+1 for motor_number
-      Body::GetInstance()->m_Joint.SetRadian(i+1, traj.angles_rad[offset+i]);
-    }
-
-    // advance the tick by 1 if we can
-    if (tick+1 < traj.nticks) {
-      tick += 1;
+      Body::GetInstance()->m_Joint.SetRadian(i+1, traj.angles_rad[offset]);
+      ++offset;
     }
 
     usleep(dt_usec);
