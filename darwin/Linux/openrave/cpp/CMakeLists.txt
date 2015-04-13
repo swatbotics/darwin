@@ -18,6 +18,7 @@ add_subdirectory(control_ee)
 add_subdirectory(forwardKin)
 add_subdirectory(Jacobians)
 add_subdirectory(diff_kin)
+add_subdirectory(zero_finding)
 endif (${SDL_FOUND})
 
 
