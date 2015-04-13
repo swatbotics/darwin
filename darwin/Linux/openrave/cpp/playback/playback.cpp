@@ -93,6 +93,8 @@ bool parse_file(const char* filename, SimpleTrajectory& traj) {
 
   size_t offset = 0;
 
+  traj.angles_rad.resize(traj.nticks * traj.njoints);
+
   for (size_t t=0; t<traj.nticks; ++t) {
     for (size_t i=0; i<traj.njoints; ++i) { 
       if (!(istr >> traj.angles_rad[offset])) {
