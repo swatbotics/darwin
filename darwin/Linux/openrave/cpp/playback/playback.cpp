@@ -7,6 +7,7 @@
 #include <sstream>
 #include <vector>
 #include <assert.h>
+#include <sys/stat.h>
 
 #include "Body.h"
 #include "Camera.h"
@@ -27,8 +28,18 @@ int motion_initialization(){
     return -1;
   }
   MotionManager::GetInstance()->AddModule((MotionModule*)Body::GetInstance());	
+
+
   LinuxMotionTimer *motion_timer = new LinuxMotionTimer(MotionManager::GetInstance());
   motion_timer->Start();
+
+  struct stat sb;
+
+  if (stat("offsets.ini", &sb) == 0 && S_ISREG(sb.st_mode)) {
+    minIni* ini = new minIni("offsets.ini");
+    MotionManager::GetInstance()->LoadINISettings(ini);
+    printf("parsed offsets.ini!\n");
+  }
 
   MotionManager::GetInstance()->SetEnable(true);
   for (int i=1; i<=20; i++){
